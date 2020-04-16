@@ -10,7 +10,6 @@
 #include "carla/trafficmanager/TrafficManagerBase.h"
 #include "carla/Exception.h"
 
-#define DEBUG_PRINT_TM  0
 
 namespace carla {
 namespace traffic_manager {
@@ -33,6 +32,11 @@ TrafficManager::TrafficManager(
 }
 
 void TrafficManager::Release() {
+#if DEBUG_PRINT_TM
+    std::cout << "Releasing the traffic manager..." << std::endl;
+#endif
+
+	
   std::lock_guard<std::mutex> lock(_mutex);
   for(auto& tm : _tm_map) {
     tm.second->Release();
@@ -43,6 +47,10 @@ void TrafficManager::Release() {
 }
 
 void TrafficManager::Reset() {
+#if DEBUG_PRINT_TM
+    std::cout << "Resetting the traffic manager..." << std::endl;
+#endif
+	
   std::lock_guard<std::mutex> lock(_mutex);
   for(auto& tm : _tm_map) {
     tm.second->Reset();

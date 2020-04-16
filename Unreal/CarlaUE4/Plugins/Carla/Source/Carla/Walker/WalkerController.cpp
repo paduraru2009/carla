@@ -15,6 +15,9 @@
 
 #include <boost/variant/apply_visitor.hpp>
 
+#define CM_TO_METER		0.01f
+#define M_TO_CENTIMETERS 100.0f
+
 AWalkerController::AWalkerController(const FObjectInitializer &ObjectInitializer)
   : Super(ObjectInitializer)
 {
@@ -107,17 +110,74 @@ void AWalkerController::SetManualBones(const bool bIsEnabled)
   }
 }
 
-void AWalkerController::ControlTickVisitor::operator()(const FWalkerControl &WalkerControl)
+void AWalkerController::ControlTickVisitor::operator()(FWalkerControl &WalkerControl)
 {
   auto *Character = Controller->GetCharacter();
   if (Character != nullptr)
   {
-    Character->AddMovementInput(WalkerControl.Direction,
-        WalkerControl.Speed / Controller->GetMaximumWalkSpeed());
-    if (WalkerControl.Jump)
-    {
-      Character->Jump();
-    }
+    // Do we have a forced target to go in the control ?
+  	if (WalkerControl.forceTargetPosition)
+	{
+      const FVector currentPos = Character->GetActorLocation();
+
+      const FVector forward = Character->GetActorForwardVector();
+
+      // Convert positions to centimeters :
+      // TODO: convert them at receive time
+      const FVector targetPos_cm = WalkerControl.nextTargetPos * M_TO_CENTIMETERS;
+      for (int i = 0; i < NUM_PFNN_BONES * 3; i++)
+      {
+          WalkerControl.poses[i] *= M_TO_CENTIMETERS;
+      }
+
+      FVector direction = targetPos_cm - currentPos;
+      direction.Z = 0.0f;
+
+      const float maxSpeed = Controller->GetMaximumWalkSpeed();
+      const float targetSpeedPercent = WalkerControl.Speed / maxSpeed;
+
+      const bool useControlDirection = true;
+      Character->AddMovementInput(useControlDirection ? WalkerControl.Direction : direction, targetSpeedPercent);
+
+      FVector newPos = Character->GetActorLocation();
+      newPos = newPos;
+
+      // TODO: check overshoot
+
+      // Render skeleton target if requested
+      if (WalkerControl.usePFNN)
+      {
+          int parents[NUM_PFNN_BONES] = {-1, 0, 1, 2, 3, 4, 0, 6, 7, 8, 9, 0, 11, 12, 13, 14, 15, 13, 17, 18, 19, 20, 21, 20, 13, 24, 25, 26, 27, 28, 27};
+
+          for (int i = 0; i < NUM_PFNN_BONES; i++)
+          {
+              const float* jointPosBase = &WalkerControl.poses[i*3];
+              FVector jointPos(jointPosBase[0], jointPosBase[1], jointPosBase[2]);
+              //jointPos += targetPos_cm; // Add the ideal agent pos
+
+              int parent = parents[i];
+              if (parent != -1)
+              {
+                  const float* jointParentPoseBase = &WalkerControl.poses[parent*3];
+                  FVector jointParentPos(jointParentPoseBase[0], jointParentPoseBase[1], jointParentPoseBase[2]);
+                  //jointParentPos += targetPos_cm; // Add the ideal agent pos
+
+                  DrawDebugLine(Character->GetWorld(), jointParentPos, jointPos, FColor::Emerald, false, -1.0f, ECC_WorldStatic, 3.f);
+              }
+          }
+      }
+
+      // TODO: do pfnn inference !
+  	}
+	else
+	{
+	    Character->AddMovementInput(WalkerControl.Direction,
+	        WalkerControl.Speed / Controller->GetMaximumWalkSpeed());
+	    if (WalkerControl.Jump)
+	    {
+	      Character->Jump();
+	    }
+	}
   }
 }
 

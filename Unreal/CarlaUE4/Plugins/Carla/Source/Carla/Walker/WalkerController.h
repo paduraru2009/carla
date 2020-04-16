@@ -32,7 +32,7 @@ private:
     ControlTickVisitor(AWalkerController *Controller)
       : Controller(Controller) {}
 
-    void operator()(const FWalkerControl &WalkerControl);
+    void operator()(FWalkerControl &WalkerControl);
 
     void operator()(FWalkerBoneControl &WalkerBoneControl);
 
@@ -81,4 +81,5 @@ private:
   boost::variant<FWalkerControl, FWalkerBoneControl> Control;
 
   bool bManualBones;
+  FVector m_lastAgentPos;
 };

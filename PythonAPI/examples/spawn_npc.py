@@ -84,7 +84,7 @@ def main():
         help='Enanble')
     args = argparser.parse_args()
 
-    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
+    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.CRITICAL)
 
     vehicles_list = []
     walkers_list = []
@@ -98,6 +98,8 @@ def main():
 
         traffic_manager = client.get_trafficmanager(args.tm_port)
         traffic_manager.set_global_distance_to_leading_vehicle(2.0)
+        traffic_manager.set_synchronous_mode(False)
+
         if args.hybrid:
             traffic_manager.set_hybrid_physics_mode(True)
 
@@ -106,7 +108,7 @@ def main():
 
         if args.sync:
             settings = world.get_settings()
-            traffic_manager.set_synchronous_mode(True)
+            #traffic_manager.set_synchronous_mode(True)
             if not settings.synchronous_mode:
                 synchronous_master = True
                 settings.synchronous_mode = True

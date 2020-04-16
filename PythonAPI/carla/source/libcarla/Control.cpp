@@ -34,7 +34,13 @@ namespace rpc {
   std::ostream &operator<<(std::ostream &out, const WalkerControl &control) {
     out << "WalkerControl(direction=" << control.direction
         << ", speed=" << std::to_string(control.speed)
-        << ", jump=" << boolalpha(control.jump) << ')';
+        << ", jump=" << boolalpha(control.jump)
+        << ", useForcedTarget=" << boolalpha(control.useForcedTarget)
+        << ", targetPos=" << control.targetPos
+        << ", usePFNN=" << boolalpha(control.usePFNN)
+//        <<" , poses=" << control.poses[0]
+//        <<" , poses=" << control.poses[1]
+        << ')';
     return out;
   }
 
@@ -261,6 +267,24 @@ boost::python::object WalkerBoneControl_init(boost::python::tuple args, boost::p
   return res;
 }
 
+
+static auto GetPose(const carla::rpc::WalkerControl &self) {
+  const auto& poses = self.poses;
+  boost::python::object get_iter = boost::python::iterator<std::vector<float>>();
+  boost::python::object iter = get_iter(poses);
+  return boost::python::list(iter);
+}
+
+static void SetPose(carla::rpc::WalkerControl &self, const boost::python::list &list) {
+  std::vector<float> poses;
+  auto length = boost::python::len(list);
+  for (auto i = 0u; i < length; ++i) {
+    poses.push_back(boost::python::extract<float>(list[i]));
+  }
+  self.poses = poses;
+}
+
+
 void export_control() {
   using namespace boost::python;
   namespace cg = carla::geom;
@@ -287,18 +311,30 @@ void export_control() {
     .def(self_ns::str(self_ns::self))
   ;
 
+  class_<std::vector<float>>("posesarray")
+    .def("__iter__", iterator<std::vector<float> >())
+  ;
+
   class_<cr::WalkerControl>("WalkerControl")
-    .def(init<cg::Vector3D, float, bool>(
-       (arg("direction") = cg::Vector3D{1.0f, 0.0f, 0.0f},
-       arg("speed") = 0.0f,
-       arg("jump") = false)))
+    .def(init<cg::Vector3D, float, bool, bool, cg::Vector3D, bool>(
+        (arg("direction")=cg::Vector3D{1.0f, 0.0f, 0.0f},
+         arg("speed")=0.0f,
+         arg("jump")=false,
+         arg("useForcedTarget")=false,
+         arg("targetPos")=cg::Vector3D{-100.0f, -100.0f, -120.0f},
+         arg("usePFNN")=false)))
     .def_readwrite("direction", &cr::WalkerControl::direction)
     .def_readwrite("speed", &cr::WalkerControl::speed)
     .def_readwrite("jump", &cr::WalkerControl::jump)
+    .def_readwrite("useForcedTarget", &cr::WalkerControl::useForcedTarget)
+    .def_readwrite("targetPos", &cr::WalkerControl::targetPos)
+    .def_readwrite("usePFNN", &cr::WalkerControl::usePFNN)
+    .add_property("poses", &GetPose, &SetPose)
     .def("__eq__", &cr::WalkerControl::operator==)
     .def("__ne__", &cr::WalkerControl::operator!=)
     .def(self_ns::str(self_ns::self))
   ;
+
 
   class_<cr::WalkerBoneControl>("WalkerBoneControl")
     .def("__init__", raw_function(WalkerBoneControl_init))

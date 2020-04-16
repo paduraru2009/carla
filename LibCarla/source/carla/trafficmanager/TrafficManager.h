@@ -189,6 +189,7 @@ public:
 
   /// Method to switch traffic manager into synchronous execution.
   void SetSynchronousMode(bool mode) {
+      std::cout << "Setting synchronous mode to " << mode << std::endl;
     TrafficManagerBase* tm_ptr = GetTM(_port);
     if(tm_ptr != nullptr){
       tm_ptr->SetSynchronousMode(mode);
@@ -196,7 +197,7 @@ public:
   }
 
   /// Method to set tick timeout for synchronous execution.
-  void SetSynchronousModeTimeOutInMiliSecond(double time) {
+  void SetSynchronousModeTimeOutInMiliSecond(double time) {  	
     TrafficManagerBase* tm_ptr = GetTM(_port);
     if(tm_ptr != nullptr){
       tm_ptr->SetSynchronousModeTimeOutInMiliSecond(time);
@@ -240,6 +241,8 @@ private:
     uint16_t port);
 
   TrafficManagerBase* GetTM(uint16_t port) const {
+      std::cout << "Getting the tm at port " << port << std::endl;
+      std::cout << "Current map has " << _tm_map.size() << " entries";
     std::lock_guard<std::mutex> lock(_mutex);
     auto it = _tm_map.find(port);
     if (it != _tm_map.end()) {

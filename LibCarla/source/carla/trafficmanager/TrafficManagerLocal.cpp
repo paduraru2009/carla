@@ -36,6 +36,10 @@ TrafficManagerLocal::TrafficManagerLocal(
 }
 
 TrafficManagerLocal::~TrafficManagerLocal() {
+#if DEBUG_PRINT_TM
+    std::cout << "Releasing the LOCAL traffic manager..." << std::endl;
+#endif
+
   episodeProxyTM.Lock()->DestroyTrafficManager(server.port());
   Release();
 }
@@ -121,6 +125,10 @@ void TrafficManagerLocal::Stop() {
 }
 
 void TrafficManagerLocal::Release() {
+#if DEBUG_PRINT_TM
+    std::cout << "Releasing the LOCAL traffic manager..." << std::endl;
+#endif
+
   Stop();
   localization_collision_messenger.reset();
   localization_traffic_light_messenger.reset();
@@ -136,6 +144,10 @@ void TrafficManagerLocal::Release() {
 }
 
 void TrafficManagerLocal::Reset() {
+
+#if DEBUG_PRINT_TM
+    std::cout << "Reseting the LOCAL traffic manager..." << std::endl;
+#endif
 
   Release();
 

@@ -17,6 +17,9 @@
 #include "carla/trafficmanager/AtomicActorSet.h"
 #include "carla/trafficmanager/AtomicMap.h"
 
+
+#define DEBUG_PRINT_TM  1
+
 namespace carla {
 namespace traffic_manager {
 

@@ -46,13 +46,20 @@ namespace carla {
 
 namespace logging {
 
+    static bool enableLoggingWithoutLevel = false;
+
   // https://stackoverflow.com/a/27375675
   template <typename Arg, typename ... Args>
   LIBCARLA_NOINLINE
   static void write_to_stream(std::ostream &out, Arg &&arg, Args && ... args) {
-    out << std::boolalpha << std::forward<Arg>(arg);
-    using expander = int[];
-    (void) expander{0, (void(out << ' ' << std::forward<Args>(args)), 0) ...};
+      if (enableLoggingWithoutLevel)
+      {
+          out << std::boolalpha << std::forward<Arg>(arg);
+          using expander = int[];
+          (void)expander {
+              0, (void(out << ' ' << std::forward<Args>(args)), 0) ...
+          };
+      }
   }
 
   template <typename ... Args>

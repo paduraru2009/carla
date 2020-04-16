@@ -77,7 +77,8 @@ namespace detail {
         jump(control.jump) {}
 
     operator rpc::WalkerControl() const {
-      return {geom::Vector3D{direction[0u], direction[1u], direction[2u]}, speed, jump};
+      return {geom::Vector3D{direction[0u], direction[1u], direction[2u]}, speed, jump,
+      false, geom::Vector3D{0.0f, 0.0f, 0.0f}, false};
     }
 
   private:
