@@ -17,7 +17,7 @@
 #include <string>
 
 namespace carla {
-namespace geom { class GeoLocation; }
+namespace geom { class GeoLocation; class Tranform;}
 namespace client {
 
   class Waypoint;
@@ -48,6 +48,10 @@ namespace client {
 
     const std::vector<geom::Transform> &GetRecommendedSpawnPoints() const {
       return _description.recommended_spawn_points;
+    }
+
+    const std::vector<std::pair<int, geom::Transform>>& GetSpawnPointsNearCrossWalks() const {
+        return _description.spawn_points_near_crosswalks;
     }
 
     SharedPtr<Waypoint> GetWaypoint(

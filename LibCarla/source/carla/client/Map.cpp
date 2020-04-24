@@ -34,7 +34,8 @@ namespace client {
     : Map(rpc::MapInfo{
     std::move(name),
     std::move(xodr_content),
-    std::vector<geom::Transform>{}}) {}
+    std::vector<geom::Transform>{},
+    std::vector<std::pair<int, geom::Transform>>{}}) {}
 
   Map::~Map() = default;
 

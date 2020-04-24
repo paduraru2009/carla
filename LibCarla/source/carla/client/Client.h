@@ -54,6 +54,10 @@ namespace client {
       return _simulator->GetAvailableMaps();
     }
 
+  	std::vector<std::pair<int, geom::Transform>> GetSpawnPointsNearCrosswalks() const {
+        return _simulator->GetSpawnPointsNearCrosswalks();
+    }
+
     World ReloadWorld() const {
       return World{_simulator->ReloadEpisode()};
     }

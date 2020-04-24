@@ -139,6 +139,8 @@ def compute_distance(location_1, location_2):
     norm = np.linalg.norm([x, y, z]) + np.finfo(float).eps
     return norm
 
+def dot3D(v1, v2):
+    return (v1.x*v2.x + v1.y*v2.y + v1.z*v2.z)
 
 class RenderUtils(object):
     class EventType(Enum):
@@ -219,7 +221,7 @@ class SensorsDataManagement(object):
     def _retrieve_data(self, targetFrame,  sensor_queue, timeout):
         while True:
             data = sensor_queue.get(timeout=timeout)
-            assert data.frame <= targetFrame, ("You are requesting an old frame which was already processed !. data %d, target %d" % (data.frame, targetFrame))
+            # assert data.frame <= targetFrame, ("You are requesting an old frame which was already processed !. data %d, target %d" % (data.frame, targetFrame))
             if data.frame == targetFrame:
                 return data
 
@@ -232,7 +234,7 @@ class DataCollector(object):
     class EnvSettings:
 
         # Capture params
-        number_of_spawnEpisodes = 3 # On each episode it will be spawned on a new data point
+        maxNumberOfEpisodes = 3 # On each episode it will be spawned on a new data point
         number_of_frames_to_capture = 100 # Number of frames to capture in total from an episode
         frame_step = 10  # Save one image every 10 frames
 
@@ -251,13 +253,20 @@ class DataCollector(object):
         camera_front_transform = carla.Transform(carla.Location(x=0.8, z=1.65))
         fov = 70
         isAutopilotForPlayerVehicle = False
+
+        # Environment settings
+        MapsToTest = ["Town03"]
         NumVehicles = 20
-        NumPedestrians = 100
+        NumPedestrians = 30
+        vehicles_filter_str = "vehicle.*"
+        walkers_filter_str = "walker.pedestrian.*"
+
 
         # To promote having agents around the player spawn position, we randomly select F * numPedestrians locations as start/destination points
         PedestriansSpawnPointsFactor = 100
+        PedestriansDistanceBetweenSpawnpoints = 4 # m
 
-        OUTPUT_DATA_PREFIX = "out/episode_"  # '/home/ciprian/carlatest/_out/pos_'
+        OUTPUT_DATA_PREFIX = "out/%s/episode_%d_%d"  # out/MapName/episode_index_spawnPointIndex
         OUTPUT_SEG = "CameraSeg"
         OUTPUT_SEGCITIES = "CameraSegCities"
         OUTPUT_DEPTH = "CameraDepth"
@@ -310,13 +319,13 @@ class DataCollector(object):
 
     # Promote uniform sampling around map + spawn in front of walkers
     def uniformSampleSpawnPoints(self, allSpawnpoints, numToSelect):
-        availablePoints = [(index, transform) for index, transform in enumerate(allSpawnpoints)]
+        availablePoints = [(index, transform) for index, transform in allSpawnpoints]
         selectedPointsAndIndices = [] #[None]*numToSelect
 
         for selIndex in range(numToSelect):
             # Select the one available that is furthest from existing ones
-            bestPoint = availablePoints[0]
-            bestDist = 0
+            bestPoint = None
+            bestDist = -1
             for x in availablePoints:
                 target_index = x[0]
                 target_transform = x[1].location
@@ -327,7 +336,7 @@ class DataCollector(object):
                 for y in selectedPointsAndIndices:
                     selPointLocation = y[1].location
                     d = compute_distance(target_transform, selPointLocation)
-                    if closestSelPoint == None or d < closestDist:
+                    if d < closestDist:
                         closestDist     = d
                         closestSelPoint = y
 
@@ -335,9 +344,9 @@ class DataCollector(object):
                     bestDist = closestDist
                     bestPoint = x
 
-            assert bestPoint != None
-            availablePoints.remove(bestPoint)
-            selectedPointsAndIndices.append(bestPoint)
+            if  bestPoint != None:
+                availablePoints.remove(bestPoint)
+                selectedPointsAndIndices.append(bestPoint)
 
         return selectedPointsAndIndices
 
@@ -347,12 +356,26 @@ class DataCollector(object):
                 shutil.rmtree(folderPath)
 
         if not os.path.exists(folderPath):
-            os.mkdir(folderPath)
+            os.makedirs(folderPath)
             os.mkdir(self.EnvSettings.getOutputFolder_depth(folderPath))
             os.mkdir(self.EnvSettings.getOutputFolder_depthLog(folderPath))
             os.mkdir(self.EnvSettings.getOutputFolder_rgb(folderPath))
             os.mkdir(self.EnvSettings.getOutputFolder_seg(folderPath))
             os.mkdir(self.EnvSettings.getOutputFolder_segcities(folderPath))
+
+    def createWalkersBlueprintLibrary(self):
+        blueprints = self.blueprint_library.filter(self.EnvSettings.walkers_filter_str)
+        return blueprints
+
+    def createVehiclesBlueprintLibrary(self):
+        # Filter some vehicles library
+        blueprints = self.blueprint_library.filter(self.EnvSettings.vehicles_filter_str)
+        #blueprints = [x for x in blueprints if int(x.get_attribute('number_of_wheels')) == 4]
+        blueprints = [x for x in blueprints if not x.id.endswith('isetta')]
+        blueprints = [x for x in blueprints if not x.id.endswith('carlacola')]
+        blueprints = [x for x in blueprints if not x.id.endswith('cybertruck')]
+        blueprints = [x for x in blueprints if not x.id.endswith('t2')]
+        return blueprints
 
     def __init__(self, host, port):
         self.s_weather_presets = self.find_weather_presets()
@@ -386,11 +409,18 @@ class DataCollector(object):
             self.client = carla.Client(host, port)
             self.client.set_timeout(self.EnvSettings.TIMEOUT_VALUE)
             self.availableMaps = self.client.get_available_maps()
-            print("Available maps are: ", self.availableMaps)
-            self.world = self.client.get_world()
-            self.orig_settings = self.world.get_settings()
+            logging.log(logging.INFO, ("Available maps are: {0}").format(self.availableMaps))
+            self.orig_settings = self.client.get_world().get_settings()
 
+            for mapName in self.EnvSettings.MapsToTest:
+                found = False
+                for mapAvailable in self.availableMaps:
+                    if mapName in mapAvailable:
+                        found = True
+                        break
+                assert found, ("Requested test map %s is not available on the server" % mapName)
 
+            print(dir(self.client))
             logging.log(logging.INFO, "Carla is connected")
         except:
             print("Unexpected error:", sys.exc_info()[0])
@@ -414,25 +444,32 @@ class DataCollector(object):
         self.map = self.world.get_map()
 
         # These are the spawnpoints for the vehicles in the map
-        self.spawn_points = self.map.get_spawn_points()
+        self.vehicles_spawn_points = self.map.get_spawn_points()
 
         # These are the spawnpoints for the player vehicle
         # Get one for each episode indeed, sorted by importance
-        self.player_spawn_pointsAndIndices = self.uniformSampleSpawnPoints(self.map.get_spawn_points(),
-                                                                           self.EnvSettings.number_of_spawnEpisodes)
-        self.cross_walkzones = self.map.get_crosswalks()
+        # We try to spawn the player close and with view to crosswalks
+        self.spawn_points_nearcrosswalks = self.map.get_spawn_points_nearcrosswalks()
+        self.player_spawn_pointsAndIndices = self.uniformSampleSpawnPoints(self.spawn_points_nearcrosswalks,
+                                                                           self.EnvSettings.maxNumberOfEpisodes)
+
+        assert len(self.player_spawn_pointsAndIndices) > 0, "There are no interesting spawn points on this map. Remove map or lower requirements from the server side"
+
+        #self.numEpisodesToSimulate = min(len(self.player_spawn_pointsAndIndices), self.EnvSettings.maxNumberOfEpisodes)
+        #logging.log(logging.INFO, 'I will simulate %d episodes' % self.numEpisodesToSimulate)
+        logging.log(logging.INFO, "There are %d interesting spawn points on the map" % len(self.player_spawn_pointsAndIndices))
 
     def spawnEnvironment(self, NumberOfVehicles, NumberOfPedestrians, playerSpawnTransform):
         logging.log(logging.INFO, "Starting to create the environment...")
 
         # Spawn the player's vehicle at the given location
-        logging.log(logging.INFO, 'Spawning player vehicle...')
+        playerSpawnLocation = playerSpawnTransform.location
         self.currWaypoint = self.map.get_waypoint(playerSpawnTransform.location) # This is its first waypoint
 
         vehiclesLib = self.blueprint_library.filter('vehicle.audi.a*')
         self.playerVehicle = self.world.spawn_actor(random.choice(vehiclesLib), playerSpawnTransform)
         self.s_players_actor_list.append(self.playerVehicle)
-        self.playerVehicle.set_simulate_physics(True)
+        self.playerVehicle.set_simulate_physics(False)
 
         # Spawn the camera sensors
         #------------------------------------------------------
@@ -458,23 +495,21 @@ class DataCollector(object):
         SpawnActorFunctor = carla.command.SpawnActor
 
         # some settings
-        vehicles_filter_str = "vehicle.*"
-        walkers_filter_str = "walker.pedestrian.*"
-        percentagePedestriansRunning = 0.5  # how many pedestrians will run
-        percentagePedestriansCrossing = 0.5  # how many pedestrians will walk through the road
+        percentagePedestriansRunning = 0.3  # how many pedestrians will run
+        percentagePedestriansCrossing = 0.6  # how many pedestrians will walk through the road
 
         time.sleep(SYNC_TIME)
         self.world.tick() # Be sure that player's vehicle is spawned
 
-        blueprint_library   = self.world.get_blueprint_library()
-        blueprints_walkers  = blueprint_library.filter(walkers_filter_str)
-        blueprints_vehicles = self.world.get_blueprint_library().filter(vehicles_filter_str)
+        blueprints_walkers  = self.createWalkersBlueprintLibrary()
+        blueprints_vehicles = self.createVehiclesBlueprintLibrary()
 
         # --------------
         # Spawn vehicles
         # --------------
         logging.log(logging.INFO, 'Spawning vehicles')
-        for n, transform in enumerate(self.spawn_points):
+        self.vehicles_spawn_points = sorted(self.vehicles_spawn_points, key = lambda transform : compute_distance(transform.location, playerSpawnTransform.location))
+        for n, transform in enumerate(self.vehicles_spawn_points):
             if n >= NumberOfVehicles:
                 break
             blueprint = random.choice(blueprints_vehicles)
@@ -489,62 +524,120 @@ class DataCollector(object):
             if vehicle is not None:
                 self.s_vehicles_list.append(vehicle)
 
+        spawnAndDestinationPoints = []
+
         # -------------
         # Spawn Walkers
         # -------------
+        playerSpawnForward = playerSpawnTransform.rotation.get_forward_vector()
         logging.log(logging.INFO, 'Spawning walkers...')
         walkers_list = []
         # 1. take all the random locations to spawn
-        spawn_points = []
+        spawnAndDestinationPoints_extended = []
         # To promote having agents around the player spawn position, we randomly select F * numPedestrians locations,
         # on the navmesh, then select the closest ones to the spawn position
         numSpawnPointsToGenerate = self.EnvSettings.PedestriansSpawnPointsFactor * NumberOfPedestrians
         for i in range(numSpawnPointsToGenerate):
-            spawn_point = carla.Transform()
-            loc = self.world.get_random_location_from_navigation()
-            if (loc != None):
-                spawn_point.location = loc
-                spawn_points.append(spawn_point)
+            loc1 = self.world.get_random_location_from_navigation()
+            loc2 = self.world.get_random_location_from_navigation()
+            if (loc1 != None and loc2 != None):
+
+                # Check if one of them are in front of the car
+                forward_loc1 = loc1 - playerSpawnLocation
+                forward_loc2 = loc2 - playerSpawnLocation
+                isLoc1InFront = dot3D(forward_loc1, playerSpawnForward)
+                isLoc2InFront = dot3D(forward_loc2, playerSpawnForward)
+                if isLoc1InFront or isLoc2InFront:
+                    # Swap spawn with destination maybe position
+                    #if isLoc1InFront == False:
+                    #    loc2, loc1 = loc1, loc2
+                    spawn_point = carla.Transform()
+                    spawn_point.location = loc1
+                    destination_point = carla.Transform()
+                    destination_point.location = loc2
+                    spawnAndDestinationPoints_extended.append((spawn_point, destination_point))
 
         # Sort the points depending on their distance to playerSpawnTransform
-        spawn_points = sorted(spawn_points, key = lambda transform : compute_distance(transform.location, playerSpawnTransform.location))
-        spawn_points = spawn_points[:NumberOfPedestrians]
+        spawnAndDestinationPoints_extended = sorted(spawnAndDestinationPoints_extended, key = lambda SpawnAndDestTransform : compute_distance(SpawnAndDestTransform[0].location, playerSpawnTransform.location))
 
-        # Destination points are from the same set, but we shuffle them
-        destination_points = spawn_points
-        random.shuffle(destination_points)
+        if len(spawnAndDestinationPoints_extended) > 0:
+            # Now select points that are Xm depart from each other
+            spawnAndDestinationPoints = [spawnAndDestinationPoints_extended[0]]
+            unselected_points = []
+            for pIndex in range(1, len(spawnAndDestinationPoints_extended)):
+                potential_point = spawnAndDestinationPoints_extended[pIndex]
+                shortedDistToAnySelected = math.inf
+                for selectedPoint, destPoint in spawnAndDestinationPoints:
+                    distToThisSelPoint = compute_distance(potential_point[0].location, selectedPoint.location)
+                    if distToThisSelPoint < shortedDistToAnySelected:
+                        shortedDistToAnySelected = distToThisSelPoint
+
+                if shortedDistToAnySelected > self.EnvSettings.PedestriansDistanceBetweenSpawnpoints:
+                    spawnAndDestinationPoints.append(potential_point)
+                else:
+                    unselected_points.append(potential_point)
+
+                # Selecting enough, so leaving
+                if len(spawnAndDestinationPoints) >= NumberOfPedestrians:
+                    break
+
+            # Didn't complete the list with the filter above ? just chose some random points
+            diffNeeded = NumberOfPedestrians - len(spawnAndDestinationPoints)
+            if diffNeeded > 0:
+                U = list(np.random.choice(unselected_points, size=diffNeeded, replace=False))
+                spawnAndDestinationPoints.extend(U)
+            spawnAndDestinationPoints = spawnAndDestinationPoints[:NumberOfPedestrians]
+
+            # Destination points are from the same set, but we shuffle them
+            #destination_points = spawnAndDestinationPoints
+            #random.shuffle(destination_points)
 
 
         # 2. we spawn the walker object
         batch = []
         walker_speed = []
-        for spawn_point in spawn_points:
+        target_points = []
+        for spawn_point, target_point in spawnAndDestinationPoints:
             walker_bp = random.choice(blueprints_walkers)
             # set as not invincible
             if walker_bp.has_attribute('is_invincible'):
                 walker_bp.set_attribute('is_invincible', 'false')
             # set the max speed
             if walker_bp.has_attribute('speed'):
+                maxRunningSpeed = float(walker_bp.get_attribute('speed').recommended_values[2])
+                maxWalkingSpeed = float(walker_bp.get_attribute('speed').recommended_values[1])
+                minRunningSpeed = maxWalkingSpeed
+                minWalkingSpeed = max(1.2, maxWalkingSpeed * 0.5)
+
+                outSpeed = maxWalkingSpeed
                 if random.random() > percentagePedestriansRunning:
                     # walking
-                    walker_speed.append(walker_bp.get_attribute('speed').recommended_values[1])
+                    outSpeed = minWalkingSpeed + np.random.rand() * (maxWalkingSpeed - minWalkingSpeed)
                 else:
                     # running
-                    walker_speed.append(walker_bp.get_attribute('speed').recommended_values[2])
+                    outSpeed = minRunningSpeed + np.random.rand() * (maxRunningSpeed - minRunningSpeed)
+
+                walker_speed.append(outSpeed)
             else:
                 print("Walker has no speed")
                 walker_speed.append(0.0)
+            target_points.append(target_point)
             batch.append(SpawnActorFunctor(walker_bp, spawn_point))
         results = self.client.apply_batch_sync(batch, True)
 
+        # Store from walker speeds and target points only those that succeeded
         walker_speed2 = []
+        target_points2 = []
         for i in range(len(results)):
             if results[i].error:
                 logging.error(results[i].error)
             else:
                 walkers_list.append({"id": results[i].actor_id})
                 walker_speed2.append(walker_speed[i])
+                target_points2.append(target_points[i])
         walker_speed = walker_speed2
+        target_point = target_points2
+
         # 3. we spawn the walker controller
         batch = []
         walker_controller_bp = self.world.get_blueprint_library().find('controller.ai.walker')
@@ -572,7 +665,7 @@ class DataCollector(object):
             # start walker
             all_pedestrian_actors[i].start()
             # set walk to random point
-            all_pedestrian_actors[i].go_to_location(self.world.get_random_location_from_navigation())
+            all_pedestrian_actors[i].go_to_location(target_points[int(i/2)].location)
             # max speed
             all_pedestrian_actors[i].set_max_speed(float(walker_speed[int(i / 2)]))
 
@@ -600,8 +693,8 @@ class DataCollector(object):
         # connects each time with a new client.)         
         self.traffic_manager = self.client.get_trafficmanager(self.EnvSettings.tm_port)
         self.traffic_manager.set_global_distance_to_leading_vehicle(2.0)
-        self.traffic_manager.set_synchronous_mode(False)
-        self.traffic_manager.global_percentage_speed_difference(-30.0)
+        self.traffic_manager.set_synchronous_mode(True)
+        self.traffic_manager.global_percentage_speed_difference(-20.0)
 
         time.sleep(SYNC_TIME)
         self.world.tick()
@@ -621,15 +714,12 @@ class DataCollector(object):
             logging.log(logging.INFO, 'Environment already distroyed')
             return
 
-        logging.log(logging.INFO, 'Destroying the environment')
-        self.releaseServerConnection()
-
         logging.log(logging.INFO, 'Destroying %d vehicles' % len(self.s_vehicles_list))
         client.apply_batch([carla.command.DestroyActor(x) for x in self.s_vehicles_list])
         self.s_vehicles_list = []
 
         # stop walker controllers (list is [controller, actor, controller, actor ...])
-        print("Stopping the walker controllers")
+        logging.log(logging.INFO,"Stopping the walker controllers")
         for i in range(0, len(self.all_pedestrian_actors), 2):
             self.all_pedestrian_actors[i].stop()
 
@@ -643,6 +733,10 @@ class DataCollector(object):
 
         time.sleep(SYNC_TIME_PLUS)
         self.world.tick()
+
+        logging.log(logging.INFO, 'Destroying the environment')
+        self.releaseServerConnection()
+
         logging.log(logging.INFO, "===End destroying the environment...")
 
     def collectSingleEpisodeData(self, outputFolder):
@@ -737,25 +831,37 @@ class DataCollector(object):
             return
         # Run for a number of predefined episodes
         try:
-            for start_i in range(self.EnvSettings.number_of_spawnEpisodes):
-                self.loadWorld()
-                # Set the current output folder
-                logging.log(logging.INFO, "Preparing episode %s\n=================", start_i)
-                logging.log(logging.INFO, "Setting parameters and world %s\n=================", start_i)
+            for mapName in self.EnvSettings.MapsToTest:
 
-                playerSpawnTransform = self.player_spawn_pointsAndIndices[start_i][1] # The location where to spawn
-                playerSpawnIndex = self.player_spawn_pointsAndIndices[start_i][0] # The index from the original set of spawn points where to spawn
-                self.spawnEnvironment(NumberOfVehicles=self.EnvSettings.NumVehicles,
-                                      NumberOfPedestrians=self.EnvSettings.NumPedestrians,
-                                      playerSpawnTransform=playerSpawnTransform)
+                # Load the map
+                self.world = self.client.load_world(mapName)
 
-                output_folder = self.EnvSettings.OUTPUT_DATA_PREFIX + str(playerSpawnIndex)
-                self.prepareOutputFolder(output_folder)
-                shouldContinue = self.collectSingleEpisodeData(output_folder)
-                self.destroy_current_environment(self.client)
+                # Do the episodes. We cycle through the spawn points if not enough
+                for episodeIndex in range(self.EnvSettings.maxNumberOfEpisodes):
+                    self.loadWorld()
+                    # Set the current output folder
+                    logging.log(logging.INFO, "Preparing episode %s\n=================", episodeIndex)
+                    logging.log(logging.INFO, "Setting parameters and world %s\n=================", episodeIndex)
 
-                if shouldContinue == False:
-                    break
+                    spawnPointIter = episodeIndex % len(self.player_spawn_pointsAndIndices)
+                    playerSpawnTransform = self.player_spawn_pointsAndIndices[spawnPointIter][1] # The location where to spawn
+                    playerSpawnIndex = self.player_spawn_pointsAndIndices[spawnPointIter][0] # The index from the original set of spawn points where to spawn
+
+                    logging.log(logging.INFO, ('Spawning player vehicle at index %d and position (%f, %f, %f)') % (playerSpawnIndex,
+                    playerSpawnTransform.location.x, playerSpawnTransform.location.y, playerSpawnTransform.location.z))
+
+
+                    self.spawnEnvironment(NumberOfVehicles=self.EnvSettings.NumVehicles,
+                                          NumberOfPedestrians=self.EnvSettings.NumPedestrians,
+                                          playerSpawnTransform=playerSpawnTransform)
+
+                    output_folder = self.EnvSettings.OUTPUT_DATA_PREFIX % (mapName, episodeIndex, playerSpawnIndex)
+                    self.prepareOutputFolder(output_folder)
+                    shouldContinue = self.collectSingleEpisodeData(output_folder)
+                    self.destroy_current_environment(self.client)
+
+                    if shouldContinue == False:
+                        break
         except:
             print("Unexpected error:", sys.exc_info()[0])
             tb = traceback.format_exc()

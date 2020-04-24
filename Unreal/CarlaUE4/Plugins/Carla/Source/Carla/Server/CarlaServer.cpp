@@ -150,7 +150,7 @@ private:
 // =============================================================================
 // -- Bind Actions -------------------------------------------------------------
 // =============================================================================
-
+#pragma optimize("", off)
 void FCarlaServer::FPimpl::BindActions()
 {
   namespace cr = carla::rpc;
@@ -223,6 +223,14 @@ void FCarlaServer::FPimpl::BindActions()
     }
     return result;
   };
+  /*
+  BIND_SYNC(get_spawn_points_near_crosswalks) << [this]() -> R<std::vector<std::pair<int, cg::Transform>>>
+  {
+      REQUIRE_CARLA_EPISODE();
+      const auto& SpawnPointsCrossWalks = Episode->GetSpawnPointsNearCrossWalks();
+      std::vector<std::pair<int, cg::Transform>> results = SpawnPointsCrossWalks;
+      return results;
+  };*/
 
   BIND_SYNC(load_new_episode) << [this](const std::string &map_name) -> R<void>
   {
@@ -252,16 +260,22 @@ void FCarlaServer::FPimpl::BindActions()
     return cr::EpisodeInfo{Episode->GetId(), BroadcastStream.token()};
   };
 
+
   BIND_SYNC(get_map_info) << [this]() -> R<cr::MapInfo>
   {
     REQUIRE_CARLA_EPISODE();
     auto FileContents = UOpenDrive::LoadXODR(Episode->GetMapName());
     const auto &SpawnPoints = Episode->GetRecommendedSpawnPoints();
+    std::vector< UCarlaEpisode::IndexAndSpawnTransform > outSpawnPoints;
+    Episode->GetSpawnPointsNearCrossWalks(outSpawnPoints);
     return cr::MapInfo{
       cr::FromFString(Episode->GetMapName()),
       cr::FromFString(FileContents),
-      MakeVectorFromTArray<cg::Transform>(SpawnPoints)};
+      MakeVectorFromTArray<cg::Transform>(SpawnPoints),
+      outSpawnPoints };
   };
+
+
 
   BIND_SYNC(get_navigation_mesh) << [this]() -> R<std::vector<uint8_t>>
   {
@@ -1032,6 +1046,8 @@ void FCarlaServer::FPimpl::BindActions()
     return result;
   };
 }
+
+#pragma optimize("", on)
 
 // =============================================================================
 // -- Undef helper macros ------------------------------------------------------

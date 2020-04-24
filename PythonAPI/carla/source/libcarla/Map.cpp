@@ -15,6 +15,7 @@
 
 #include <ostream>
 #include <fstream>
+#include <vector>
 
 namespace carla {
 namespace client {
@@ -40,6 +41,20 @@ static void SaveOpenDriveToDisk(const carla::client::Map &self, std::string path
   carla::FileSystem::ValidateFilePath(path, ".xodr");
   std::ofstream out(path);
   out << self.GetOpenDrive() << std::endl;
+}
+
+boost::python::list GetSpawnPointsNearCrosswalks(const carla::client::Map &self) {
+  carla::PythonUtil::ReleaseGIL unlock;
+
+  const std::vector<std::pair<int, carla::geom::Transform>>& resarray = self.GetSpawnPointsNearCrossWalks();
+  namespace py = boost::python;
+  py::list result;
+
+  for (const auto &point : resarray) 
+  {
+    result.append(py::make_tuple(point.first, point.second));
+  }
+  return result;
 }
 
 static auto GetTopology(const carla::client::Map &self) {
@@ -158,6 +173,7 @@ void export_map() {
     .def(init<std::string, std::string>((arg("name"), arg("xodr_content"))))
     .add_property("name", CALL_RETURNING_COPY(cc::Map, GetName))
     .def("get_spawn_points", CALL_RETURNING_LIST(cc::Map, GetRecommendedSpawnPoints))
+    .def("get_spawn_points_nearcrosswalks", &GetSpawnPointsNearCrosswalks)
     .def("get_waypoint", &cc::Map::GetWaypoint, (arg("location"), arg("project_to_road")=true, arg("lane_type")=cr::Lane::LaneType::Driving))
     .def("get_waypoint_xodr", &cc::Map::GetWaypointXODR, (arg("road_id"), arg("lane_id"), arg("s")))
     .def("get_topology", &GetTopology)

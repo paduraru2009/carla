@@ -111,6 +111,10 @@ namespace detail {
       return _client.GetAvailableMaps();
     }
 
+  	std::vector<std::pair<int, geom::Transform>> GetSpawnPointsNearCrosswalks() {
+        return _client.GetSpawnPointsNearCrosswalks();
+    }
+
     /// @}
     // =========================================================================
     /// @name Garbage collection policy

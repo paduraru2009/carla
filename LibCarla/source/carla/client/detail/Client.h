@@ -96,6 +96,8 @@ namespace detail {
 
     std::vector<std::string> GetAvailableMaps();
 
+    std::vector<std::pair<int, geom::Transform>> GetSpawnPointsNearCrosswalks();
+
     std::vector<rpc::ActorDefinition> GetActorDefinitions();
 
     rpc::Actor GetSpectator();

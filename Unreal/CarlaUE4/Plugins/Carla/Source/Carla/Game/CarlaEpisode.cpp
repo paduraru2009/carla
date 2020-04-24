@@ -24,6 +24,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Math/Vector.h"
 
 static FString UCarlaEpisode_GetTrafficSignId(ETrafficSignState State)
 {
@@ -234,6 +235,78 @@ TArray<FTransform> UCarlaEpisode::GetRecommendedSpawnPoints() const
   }
   return SpawnPoints;
 }
+
+#pragma optimize("", off)
+
+void UCarlaEpisode::GetSpawnPointsNearCrossWalks(std::vector< UCarlaEpisode::IndexAndSpawnTransform >& outSpawnPoints) const
+{
+    outSpawnPoints.clear();
+	
+    const float MAX_DIST_TO_CROSSWALK_CM = (20.0f * 100.0f); // Centimeters
+    const float MIN_DIST_TO_CROSSWALK_CM = (7.0f * 100.0f); // Centimeters
+    const float MAX_DIST_TO_CROSSWALK_CM_SQR = MAX_DIST_TO_CROSSWALK_CM * MAX_DIST_TO_CROSSWALK_CM;
+    const float MIN_DIST_TO_CROSSWALK_CM_SQR = MIN_DIST_TO_CROSSWALK_CM * MIN_DIST_TO_CROSSWALK_CM;
+    const float MAX_DIST_TO_CROSSWALK_HEIGHT_CM = (1.0f * 200.0f); // Cm
+	const float MAX_ANGLE_TO_CROSSWALK_DEG = 45; // 45 degrees orientation to a crosswalk maximum
+	
+	// Get the transforms of all crosswalks
+    TArray<FTransform> CrossWalkTransforms;
+    UWorld* world = GetWorld();
+	for (TActorIterator<AStaticMeshActor> It(world); It; ++It)
+	{
+        const FString& str = It->GetName();
+        if (str.Contains("Road_Crosswalk"))
+        {
+            CrossWalkTransforms.Add(It->GetTransform());        	
+        }		
+	}
+
+	// Iterate over all spawnpoints and select only those that are close to the crosswalks
+	// And oriented towards them    
+    int index = 0;
+    for (TActorIterator<AVehicleSpawnPoint> It(GetWorld()); It; ++It, ++index)
+    {
+        const FTransform& spawnPointTransform = It->GetActorTransform();
+
+    	// Check this against all crosswalk
+    	// TODO: optimize with a tree space partitioning..
+        bool foundCrossWalkInFrontAndClose = false;
+		for (const FTransform& crossWalkTransform : CrossWalkTransforms)
+		{
+			// Check dist
+            FVector spawnPointToCrossWalk = crossWalkTransform.GetLocation() - spawnPointTransform.GetLocation();
+            const float distance = spawnPointToCrossWalk.SizeSquared();
+            if (MIN_DIST_TO_CROSSWALK_CM_SQR > distance || distance > MAX_DIST_TO_CROSSWALK_CM_SQR)
+                continue;
+             
+			if (FMath::Abs(spawnPointToCrossWalk.Z) > MAX_DIST_TO_CROSSWALK_HEIGHT_CM)
+			{
+                continue;
+			}
+
+            spawnPointToCrossWalk.Z = 0.0f;
+
+			// Check orientation
+            const FVector spawnPointForward = spawnPointTransform.GetRotation().GetForwardVector().GetSafeNormal();
+            const FVector spawnPointToCrossWalkNorm = spawnPointToCrossWalk.GetSafeNormal();
+            const float dotBetweenVectors = FVector::DotProduct(spawnPointForward, spawnPointToCrossWalkNorm);
+            const float angleInRads = FMath::RadiansToDegrees(FMath::Acos(dotBetweenVectors));
+            if (angleInRads > MAX_ANGLE_TO_CROSSWALK_DEG)
+                continue;
+
+            foundCrossWalkInFrontAndClose = true;
+            break;
+		}
+
+    	if (foundCrossWalkInFrontAndClose)
+    	{
+            outSpawnPoints.push_back(std::make_pair(index, spawnPointTransform));
+    	}
+    }
+}
+
+#pragma optimize("", on)
+
 
 carla::rpc::Actor UCarlaEpisode::SerializeActor(FActorView ActorView) const
 {

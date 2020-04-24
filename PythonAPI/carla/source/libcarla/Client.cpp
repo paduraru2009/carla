@@ -159,7 +159,7 @@ void export_client() {
     .def("get_client_version", &cc::Client::GetClientVersion)
     .def("get_server_version", CONST_CALL_WITHOUT_GIL(cc::Client, GetServerVersion))
     .def("get_world", &cc::Client::GetWorld)
-    .def("get_available_maps", &GetAvailableMaps)
+    .def("get_available_maps", &GetAvailableMaps)    
     .def("reload_world", CONST_CALL_WITHOUT_GIL(cc::Client, ReloadWorld))
     .def("load_world", CONST_CALL_WITHOUT_GIL_1(cc::Client, LoadWorld, std::string), (arg("map_name")))
     .def("generate_opendrive_world", CONST_CALL_WITHOUT_GIL_4(cc::Client, GenerateOpenDriveWorld, std::string, double, double, double), (arg("opendrive"), arg("resolution")=2.0, arg("wall_height")=1.0, arg("additional_width")=0.6))

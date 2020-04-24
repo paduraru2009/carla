@@ -24,6 +24,14 @@
 #include <carla/streaming/Server.h>
 #include <compiler/enable-ue4-macros.h>
 
+#include "Containers/Map.h"
+#include "Containers/Array.h"
+#include "Templates/Function.h"
+
+
+#include <vector>
+
+
 #include "CarlaEpisode.generated.h"
 
 /// A simulation episode.
@@ -122,6 +130,13 @@ public:
   {
     return MapGeoReference;
   }
+
+  using IndexAndSpawnTransform = std::pair<int, carla::geom::Transform > ;
+  
+	
+  /// Return the list of recommended spawn points for vehicles, which are in front of cross walks
+  //UFUNCTION(BlueprintCallable)
+  void GetSpawnPointsNearCrossWalks(std::vector< UCarlaEpisode::IndexAndSpawnTransform >& outSpawnPoints) const;
 
   // ===========================================================================
   // -- Retrieve special actors ------------------------------------------------

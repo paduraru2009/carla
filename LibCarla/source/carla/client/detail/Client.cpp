@@ -166,6 +166,11 @@ namespace detail {
     return _pimpl->CallAndWait<std::vector<std::string>>("get_available_maps");
   }
 
+  std::vector<std::pair<int, geom::Transform>> Client::GetSpawnPointsNearCrosswalks() {
+      return _pimpl->CallAndWait<std::vector<std::pair<int, geom::Transform>>>("get_spawn_points_near_crosswalks");
+  }
+
+
   std::vector<rpc::ActorDefinition> Client::GetActorDefinitions() {
     return _pimpl->CallAndWait<std::vector<rpc::ActorDefinition>>("get_actor_definitions");
   }
