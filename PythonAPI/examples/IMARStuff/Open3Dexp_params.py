@@ -1,26 +1,113 @@
 import numpy as np
 import pickle
+import os
+import pytransform3d as py3d
+from pytransform3d import rotations
 
-SHOW_COORDINATE_AXIS = False
-SHOW_TRAJECTORY_POINTS = False
-POINT_SIZE = 1.0
+def rotateAroundAxis(axis, degrees):
+    euler = [0, 0, 0]
+    euler[axis] = degrees
+    R = py3d.rotations.matrix_from_euler_xyz(euler)
+    return R
+
+# TODO: these should be data driven. What if we have 1000 datasets ?
+USE_WAYMO = True # False means use citiscapes
+
+if USE_WAYMO == False:
+    SCALE_FACTOR = 5.0
+    SCALE_FACTOR_FOR_POSITIONS = SCALE_FACTOR
+    R = rotateAroundAxis(0, np.pi)
+    POINT_SIZE = 1.0
+    NEEDS_AXIS_INVERSION = True
+else:
+    SCALE_FACTOR = 1.0
+    SCALE_FACTOR_FOR_POSITIONS = 5.0 # The idea is that the environment is already scaled but positions are not
+    R = np.eye(3)
+    POINT_SIZE = 4.0
+    NEEDS_AXIS_INVERSION = False
+
+SHOW_COORDINATE_AXIS = True
+SHOW_TRAJECTORY_WAYPOINTS = True
+
 BACKGROUND_COLOR = [0.27, 0.27, 0.27]
-SCALE_FACTOR = 5.0
 INV_SCALE_FACTOR = 1.0 / SCALE_FACTOR
 POSE_SCALE_FACTOR = 0.065
 INV_POSE_SCALE_FACTOR = 1.0 / POSE_SCALE_FACTOR
+
 parents = [-1, 0, 1, 2, 3, 4, 0, 6, 7, 8, 9, 0, 11, 12, 13, 14, 15, 13, 17, 18, 19, 20, 21, 20, 13, 24, 25, 26, 27, 28, 27]
 
-OUT_VIS_FOLDER="VideoWork/Output"
 IS_DEBUG_ENABLED = "False"
-CAMERA_PARAMS_FILE = "ScreenCamera_2020-03-12-07-54-53.json" #"ScreenCamera_2020-03-11-17-42-08.json" # "ScreenCamera_2020-03-09-15-13-20.json"
+CAMERA_PARAMS_FILE_TUBINGEN = "ScreenCamera_2020-03-12-07-54-53.json" #"ScreenCamera_2020-03-11-17-42-08.json" # "ScreenCamera_2020-03-09-15-13-20.json"
 
-START_FRAME_INDEX = 0 # At which frame to start the simulation of the environment
-START_FRAME_INDEX_AGENT = 30 # At which frame to start the PFNN simulation
+# SCENES DEFINITIONS AND SIM FOR WAYMO
+# ----------------------------------------------------------------------------
+# SCENE 1:  Scene18311
+
+Waymo_Scene18311_basePath = "C:/Users/Ciprian/OneDrive - University of Bucharest, Faculty of Mathematics and Computer Science/IMAR_Work/New folder/Scene18311"
+Waymo_Scene18311_CAMERA_PARAMS_FILE = "ScreenCamera_2020-07-08-11-21-42.json"
+Waymo_Scene18311_CAMERA_SAVE_PARAMS = {
+    "ENABLED" : 1,
+    "CROP_X" : 0,
+    "CROP_Y" : 407,
+    "CROP_WIDTH" : 1620,
+    "CROP_HEIGHT" : 620,
+    "SCALE_FACTOR" : 1,
+}
+
+
+START_FRAME_INDEX_ENV = 0 # At which frame to start the simulation of the environment
+END_FRAME_INDEX_ENV = 5
+START_FRAME_INDEX_AGENT_PFNN = END_FRAME_INDEX_ENV # At which frame to start the PFNN simulation
+AGENT_START_SIM_FRAME = START_FRAME_INDEX_AGENT_PFNN - 5  # agentStartSimFrame is before END_SIM_FRAME SINCE IT NEEDS SOME INIT TIME TO START and look like walking not idle
+
+
+# WAYMO PATHS FOR SIM
+#---------------------------------------------------------
+Waymo_Scene18311_TRAJECTORY_1_points = np.array([[137.25, -42.7, 31.9], [162.088, -13.4408, 31.9], [179.119, 42.1118, 31.9288], [168.11, 86.89, 31.9]])
+Waymo_Scene18311_TRAJECTORY_1_speed = np.array([100, 230, 300, 300])
+
+Waymo_Scene18311_TRAJECTORY_2_points = np.array([[137.25, -42.7, 31.9], [181.566, -31.13, 31.9], [246.92, 50.534, 31.9], [683.585, 78.0543, 38.8533]])
+Waymo_Scene18311_TRAJECTORY_2_speed = np.array([100, 230, 300, 300])
+
+Waymo_Scene18311_TRAJECTORY_3_points = np.array([[137.25, -42.7, 31.9], [215.143, -48.9776, 31.9], [344.87, -75.93, 31.9]])
+Waymo_Scene18311_TRAJECTORY_3_speed = np.array([100, 230, 300])
+
+Waymo_Scene18311_TRAJECTORY_4_points = np.array([[137.25, -42.7, 31.9], [190.143, -73.36, 31.9], [209, -99.0, 31.9]])
+Waymo_Scene18311_TRAJECTORY_4_speed = np.array([100, 230, 300])
+
+# Should have the same size as above
+assert(len(Waymo_Scene18311_TRAJECTORY_1_points) == len(Waymo_Scene18311_TRAJECTORY_1_speed))
+# END PATH1
+
+
+
+# SCENE 2:  Scene15646511
+Waymo_Scene15646511_basePath = "C:/Users/Ciprian/OneDrive - University of Bucharest, Faculty of Mathematics and Computer Science/IMAR_Work/New folder/Scene15646511"
+Waymo_Scene15646511_CAMERA_PARAMS_FILE = "ScreenCamera_2020-07-08-19-20-16.json" #"ScreenCamera_2020-07-08-19-01-04_SAVED.json"
+Waymo_Scene15646511_CAMERA_SAVE_PARAMS = {
+    "ENABLED" : 1,
+    "CROP_X" : 0,
+    "CROP_Y" : 428,
+    "CROP_WIDTH" : 1620,
+    "CROP_HEIGHT" : 595,
+    "SCALE_FACTOR": 1,
+}
+
+Waymo_Scene15646511_TRAJECTORY_1_points = np.array([[55.546, 57.3221, 31.9], [209.29, 50.392, 31.9]])
+Waymo_Scene15646511_TRAJECTORY_1_speed = np.array([100, 230])
+
+Waymo_Scene15646511_TRAJECTORY_2_points = np.array([[55.546, 57.3221, 31.9], [140.53, 76.46, 31.9], [140.53, 177.64, 31.9]])
+Waymo_Scene15646511_TRAJECTORY_2_speed = np.array([100, 230, 300])
+
+Waymo_Scene15646511_TRAJECTORY_3_points = np.array([[55.546, 57.3221, 31.9], [69.379, 34.9, 31.9], [85.85, -58.182, 31.9], [150.53, -69.9, 31.9], [150.53, -166.9, 31.9]])
+Waymo_Scene15646511_TRAJECTORY_3_speed = np.array([100, 230, 300, 300, 300])
+
+# ----------------------------------------------------------------------------
 
 SkeletonColors = np.array([[255,     0,    85],
 [170,     0,   255],
 [255,     0,   170],
+
 [ 85,     0,   255],
 [255,     0,   255],
 [170,   255,     0],
@@ -118,12 +205,19 @@ def convert2DPosFromPointCloudVisualizerToPFnn(xpos, zpos):
     return xpos, zpos
 
 def convertBlenderToPointCloudVisualizer(pos):
-    x = pos[0] * SCALE_FACTOR
-    y = -pos[1] * SCALE_FACTOR
+    x = pos[0] * SCALE_FACTOR_FOR_POSITIONS
+    y = pos[1] * SCALE_FACTOR_FOR_POSITIONS
     z = pos[2]
-    pos[0] = x
-    pos[1] = z
-    pos[2] = y
+
+    if NEEDS_AXIS_INVERSION:
+        y = -y
+        pos[0] = x
+        pos[1] = z
+        pos[2] = y
+    else:
+        pos[0] = x
+        pos[1] = y
+        pos[2] = z
 
 # Convert the trajectory points from raw to scene coordinates (e.g. scale them, invert axis, etc)
 def transformTrajectoryPointsFromBlenderToPointCloudVis(trajectoryPoints):
@@ -266,9 +360,138 @@ def createSceneForTubingen():
             'agentStartSimFrame' : 25, 'agentStartRenderFrame':30, 'recordFramerate':17}
 
 simData_tubingen = createSceneForTubingen()
+# Position of the agent after simulation (from real data) frame ends
 startPos_tubingen = simData_tubingen['people'][simData_tubingen['numFramesToSimulate']-1][1].squeeze()
 startPos_tubingen[2] -= 3.0
 
 # END PATH3
 #######################################################################################
 
+# DATA 3 - Waymo scene 000112. Usually the data should have the save starting point trajectory to mimic different paths, but not necessarly
+#######################################################################################
+
+# These trajectory are in Blender system coordinate open cloud format Z pointing up.
+# We'll convert them to Open3D point cloud visualizer format and PFNN coordinate
+# Blender space
+
+# Add the offset paramerter
+def processWaymoSimData(simdata, heightOffset):
+    newSimData = {}
+    agentIndexInEndFrame = None
+    for frame_idx, frame_data in simdata.items():
+        newSimData[frame_idx] = {}
+        for entity_id, entity_data in frame_data.items():
+            bbminMax = entity_data['BBMinMax']
+
+            #x = (bbminMax[0][0] + bbminMax[0][1]) * 0.5
+            #y = (bbminMax[1][0] + bbminMax[1][1]) * 0.5
+            bbminMax[2][0] -= heightOffset
+            bbminMax[2][1] -= heightOffset
+
+            #if frame_idx == endSimFrame and entity_id == agentId:
+            #    agentIndexInEndFrame = len(newSimData[frame_idx])
+            #newSimData[frame_idx][entity_id] = bbminMax #append(np.array([x, y, z]))
+
+    return simdata #newSimData
+
+def createSceneSimParams(sceneBasePath, cameraFileParams, trajectoryToSimulate_points, trajectoryToSimulate_speeds, saveParams, useSegmentationView):
+    centeringFilePath = os.path.join(sceneBasePath, "centering.p")
+    centering = None
+    with open(centeringFilePath, 'rb') as centeringFileHandle:
+        centering = pickle.load(centeringFileHandle)
+        scale = centering['scale']
+        heightOffset = centering['height']
+
+    # TODO: unique key stuff
+    peoplePath = os.path.join(sceneBasePath, "people.p")
+    simdata_people = pickle.load(open(peoplePath, "rb"), encoding='latin1')
+    simdata_cars = pickle.load(open(os.path.join(sceneBasePath, "cars.p"), "rb"), encoding='latin1')
+
+    # simdata_people = processWaymoSimData(simdata_people)
+    # simdata_cars = processWaymoSimData(simdata_cars)
+
+    # Position of the agent after simulation (from real data) frame ends
+    agentStartFrame = END_FRAME_INDEX_ENV - 1
+    agentNameToFollow = list(simdata_people[agentStartFrame].keys())[0]  # '0U-i9Ibvlvz8tGCusPra1w'
+    minMaxPos = simdata_people[agentStartFrame][agentNameToFollow]['BBMinMax']
+    #startPos = trajectoryToSimulate_points[0]  # (minMaxPos[:, 0] + minMaxPos[:, 1]) * 0.5
+    #startPos[2] = minMaxPos[2][0]
+
+    # Faked traj behind a bit
+    startPos = trajectoryToSimulate_points[0].copy()
+    startPos[0] -= 5.0  # Move a bit behind for start
+    trajectoryToSimulate_points = np.concatenate(([startPos], trajectoryToSimulate_points))
+    trajectoryToSimulate_speeds = np.concatenate(([trajectoryToSimulate_speeds[0].copy()], trajectoryToSimulate_speeds))
+
+    return {'people' : simdata_people, 'cars' : simdata_cars,
+            'USE_SEGMENTATION_VIEW' : useSegmentationView,
+            'heightOffset' : heightOffset,
+            'frequency' : 17,
+            'START_FRAME_INDEX_ENV' : START_FRAME_INDEX_ENV,
+            'END_FRAME_INDEX_ENV' : END_FRAME_INDEX_ENV,
+            'agentStartSimFrame' : AGENT_START_SIM_FRAME,
+            'agentStartRenderFrame':START_FRAME_INDEX_AGENT_PFNN,
+            'recordFramerate' : 17,
+            'IS_FIXED_ENVIRONMENT' : False,
+            'EnvironmentPointCloudPath' : sceneBasePath,
+            'CameraFile' : cameraFileParams,
+            "SIM_AGENT_START_POS" : startPos,
+            "SIM_AGENT_TRAJECTORY" : trajectoryToSimulate_points,
+            "SIM_AGENT_SPEEDS" : trajectoryToSimulate_speeds,
+            "TRAJECTORY_NEEDS_TRANSFORM" : False, # Give it True if the trajectory of agent is not already scaled rotated etc
+            "SAVE_PARAMS" : saveParams,
+        }
+
+# Instantiate params for simulation
+USE_SEGMENTED_VIEW = True
+
+# These are some trajectories to show with lines/curves all at once.
+# This is used only for image visualtization purposes !!!
+
+OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj1 = "VideoWork/Output_Waymo18_rgb_traj1"
+OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj2 = "VideoWork/Output_Waymo18_rgb_traj2"
+OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj3 = "VideoWork/Output_Waymo18_rgb_traj3"
+OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj4 = "VideoWork/Output_Waymo18_rgb_traj4"
+
+OUT_VIS_FOLDER_Waymo_SCENE18311_seg_traj1 = "VideoWork/Output_Waymo18_seg_traj1"
+OUT_VIS_FOLDER_Waymo_SCENE18311_seg_traj2 = "VideoWork/Output_Waymo18_seg_traj2"
+OUT_VIS_FOLDER_Waymo_SCENE18311_seg_traj3 = "VideoWork/Output_Waymo18_seg_traj3"
+OUT_VIS_FOLDER_Waymo_SCENE18311_seg_traj4 = "VideoWork/Output_Waymo18_seg_traj4"
+
+if False:
+    SHOW_TRAJECTORIES_FOR_VIS = [Waymo_Scene18311_TRAJECTORY_1_points, Waymo_Scene18311_TRAJECTORY_2_points, Waymo_Scene18311_TRAJECTORY_3_points, Waymo_Scene18311_TRAJECTORY_4_points]
+    SHOW_TRAJECTORIES_FOR_VIS_COLORS = [[1.0, 1.0, 0.0], [0.0, 1.0, 1.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+
+    OUT_VIS_FOLDER = OUT_VIS_FOLDER_Waymo_SCENE18311_seg_traj4
+    if not os.path.exists(OUT_VIS_FOLDER):
+        os.makedirs(OUT_VIS_FOLDER)
+
+    simData_Waymo = createSceneSimParams(sceneBasePath = Waymo_Scene18311_basePath,
+                                        cameraFileParams = Waymo_Scene18311_CAMERA_PARAMS_FILE,
+                                        trajectoryToSimulate_points=Waymo_Scene18311_TRAJECTORY_4_points,
+                                        trajectoryToSimulate_speeds=Waymo_Scene18311_TRAJECTORY_4_speed,
+                                        saveParams=Waymo_Scene18311_CAMERA_SAVE_PARAMS,
+                                        useSegmentationView = USE_SEGMENTED_VIEW)
+
+OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj1 = "VideoWork/Output_Waymo15646511_rgb_traj1"
+OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj2 = "VideoWork/Output_Waymo15646511_rgb_traj2"
+OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj3 = "VideoWork/Output_Waymo15646511_rgb_traj3"
+
+OUT_VIS_FOLDER_Waymo_SCENE15646511_seg_traj1 = "VideoWork/Output_Waymo15646511_seg_traj1"
+OUT_VIS_FOLDER_Waymo_SCENE15646511_seg_traj2 = "VideoWork/Output_Waymo15646511_seg_traj2"
+OUT_VIS_FOLDER_Waymo_SCENE15646511_seg_traj3 = "VideoWork/Output_Waymo15646511_seg_traj3"
+
+if True:
+    SHOW_TRAJECTORIES_FOR_VIS = [Waymo_Scene15646511_TRAJECTORY_1_points, Waymo_Scene15646511_TRAJECTORY_2_points, Waymo_Scene15646511_TRAJECTORY_3_points]
+    SHOW_TRAJECTORIES_FOR_VIS_COLORS = [[1.0, 1.0, 0.0], [0.0, 1.0, 1.0], [0.0, 1.0, 0.0]]
+
+    OUT_VIS_FOLDER = OUT_VIS_FOLDER_Waymo_SCENE15646511_seg_traj3
+    if not os.path.exists(OUT_VIS_FOLDER):
+        os.makedirs(OUT_VIS_FOLDER)
+
+    simData_Waymo = createSceneSimParams(sceneBasePath = Waymo_Scene15646511_basePath,
+                                        cameraFileParams = Waymo_Scene15646511_CAMERA_PARAMS_FILE,
+                                        trajectoryToSimulate_points=Waymo_Scene15646511_TRAJECTORY_3_points,
+                                        trajectoryToSimulate_speeds=Waymo_Scene15646511_TRAJECTORY_3_speed,
+                                        saveParams=Waymo_Scene15646511_CAMERA_SAVE_PARAMS,
+                                        useSegmentationView = USE_SEGMENTED_VIEW)

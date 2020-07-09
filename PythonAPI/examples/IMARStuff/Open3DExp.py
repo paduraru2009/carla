@@ -8,15 +8,62 @@ import time
 import subprocess
 from enum import Enum
 import math
+import LineSetCustom
+import hashlib
 import pickle
 
 #############################################################################################################
 
-def rotateAroundAxis(axis, degrees):
-    euler = [0, 0, 0]
-    euler[axis] = degrees
-    R = py3d.rotations.matrix_from_euler_xyz(euler)
-    return R
+
+# debugging helper to see only selected entities
+def filterEntityId(id):
+    shownIds = ['Qn1uJcrBAWVxwElg2yVljw', 'tRL_3JCel2dmDFq8Bk343A']
+    #if not id in shownIds:
+    #    return False
+    return True
+
+
+# PARAMS FOR saving the history of poses
+#--------------------------------------------------
+SAVE_POSE_HISTORY = True
+MAX_POSES_IN_HIST = 150
+g_poseHistory = {} # frame id to pose list of 31 bones
+
+def savePoseHistory():
+    fullPath = os.path.join(OUT_VIS_FOLDER, "posesHist.pkl")
+    with open(fullPath, "wb") as fileHandle:
+        pickle.dump(g_poseHistory, fileHandle)
+
+# TODO: parametrize this + output folders above !!
+
+"""
+REPLAY_POSES_HISTORY_LIST = [os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj1, "posesHist.pkl"),
+                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj2, "posesHist.pkl"),
+                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj3, "posesHist.pkl"),
+                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj4, "posesHist.pkl")]
+
+
+REPLAY_POSES_HISTORY_LIST = [os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_seg_traj1, "posesHist.pkl"),
+                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_seg_traj2, "posesHist.pkl"),
+                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_seg_traj3, "posesHist.pkl"),
+                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_seg_traj4, "posesHist.pkl")]
+
+REPLAY_POSES_HISTORY_LIST = [os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj1, "posesHist.pkl"),
+                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj2, "posesHist.pkl"),
+                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj3, "posesHist.pkl")]
+                                
+"""
+REPLAY_POSES_HISTORY_LIST = [os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_seg_traj1, "posesHist.pkl"),
+                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_seg_traj2, "posesHist.pkl"),
+                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_seg_traj3, "posesHist.pkl")]    
+
+#REPLAY_POSES_HISTORY_LIST = None
+
+REPLAY_MIN_FRAME_ID = 20
+REPLAY_MAX_FRAME_ID = 130
+REPLAY_FRAMESKIP = 7
+#--------------------------------------------------
+
 
 def setPoseDataToGeometry(poseData, poseGeometries, poseOriginalCoords, YCorrection):
     def setBonePos(boxPoints, P0, P1):
@@ -32,10 +79,18 @@ def setPoseDataToGeometry(poseData, poseGeometries, poseOriginalCoords, YCorrect
             continue
 
         # Get data
+        # PFNN is with Y up and Z forward. Sometimes, like in the case of NEEDS_AXIS_INVERSION = False, it means that Z is UP.
         P0 = getBonePosFromPoseData(parents[i], poseData) * POSE_SCALE_FACTOR
         P1 = getBonePosFromPoseData(i, poseData) * POSE_SCALE_FACTOR
-        P0[1] += YCorrection
-        P1[1] += YCorrection
+
+        if NEEDS_AXIS_INVERSION:
+            P0[1] += YCorrection
+            P1[1] += YCorrection
+        else:
+            P0[2], P0[1] = P0[1], P0[2]
+            P1[2], P1[1] = P1[1], P1[2]
+            P0[2] += YCorrection
+            P1[2] += YCorrection
 
         # Set data on corresponding geometry
         geom = poseGeometries[geomIter]
@@ -56,7 +111,7 @@ def createOpen3DPoseGeometry(visGeomSet):
         if parents[i] == -1:
             continue
 
-        mesh_box = o3d.geometry.TriangleMesh.create_box(width=0.2, height = 0.1, depth=0.2)
+        mesh_box = o3d.geometry.TriangleMesh.create_box(width=0.4, height = 0.4, depth=0.4)
         mesh_box.compute_vertex_normals()
         poseGeometries_originalVertices = np.copy(mesh_box.vertices)
 
@@ -130,43 +185,67 @@ class SimulationType(Enum):
     PFNN_SIMULATION = 0
     DEBUG_SIMULATION = 1 # Take data from some file
 
+def readPCDFromPath(path, frameId = -1, useSegView = False, allowToFail = False):
+    fullPath = None
+    if frameId == -1:
+        fullPath = path
+    else:
+        fileStrFormat = "combined_carla_moving_segColor_f{0:05d}_conv.ply" if useSegView == True else "combined_carla_moving_f{0:05d}_conv.ply"
+        fullPath = os.path.join(path, fileStrFormat.format(frameId))
+
+    doesFileExists = (os.path.exists(fullPath) and os.path.isfile(fullPath))
+    assert allowToFail == True or doesFileExists == True
+
+    if not doesFileExists:
+        return None
+
+    # Read point cloud data
+    pcd = o3d.io.read_point_cloud(fullPath)
+    #get_pcd_stats(pcd)
+    pcd = pcd.rotate(R, center=np.array([0, 0, 0]))
+    pcd = pcd.scale(SCALE_FACTOR, center=np.array([0, 0, 0]))
+    # pcd = pcd.translate([0, 0, 0])
+    # pcd = pcd.voxel_down_sample(voxel_size=10)
+    #get_pcd_stats(pcd)
+    return pcd
+
+
 class SimulationEnv:
 
     # Simulates a PFNN model running on a given trajectory in a cloud point data
     # simDataPath and transform can be None
-    def initEnv(self, cloudDataPath, simData, startPos, simType, outputTransformer = None):
+    def initEnv(self, cameraFileParams, simData, startPos, simType, outputTransformer = None):
         self.simType = simType
         self.outputTransformer = outputTransformer
         #convertBlenderToPointCloudVisualizer(self.startPos)
+        self.cameraFileParams = cameraFileParams
+        self.useSegmentationView = simData["USE_SEGMENTATION_VIEW"]
+        self.pcd = None
 
-
-        # Read point cloud data
-        self.pcd = o3d.io.read_point_cloud(cloudDataPath)
-        get_pcd_stats(self.pcd)
-        R = rotateAroundAxis(0, np.pi)
-        self.pcd = self.pcd.rotate(R, center=False)
-        self.pcd = self.pcd.scale(SCALE_FACTOR, center=False)
-        # pcd = pcd.translate([0, 0, 0])
-        # pcd = pcd.voxel_down_sample(voxel_size=10)
-        get_pcd_stats(self.pcd)
-
-        # Convert start pos
-        self.startPos = (R.dot(startPos)) * SCALE_FACTOR
+        self.isFixedEnvironment = simData["IS_FIXED_ENVIRONMENT"]
+        self.cloudDataPath = simData["EnvironmentPointCloudPath"]
+        firstFrameIndex = (-1 if self.isFixedEnvironment == True else simData["START_FRAME_INDEX_ENV"])
+        firstPDC = readPCDFromPath(self.cloudDataPath, firstFrameIndex, useSegView=self.useSegmentationView)
+        self.pcd = firstPDC
 
         # Read sim data
-        self.simdata_numFrames = None
-        self.readSimData(simData, R, SCALE_FACTOR)
+        self.simdata_endEnvSimFrame = None
+        self.readSimData(simData, R, SCALE_FACTOR_FOR_POSITIONS)
+
+        # Convert start pos
+        self.startPos = ((R.dot(startPos)) * SCALE_FACTOR_FOR_POSITIONS) if self.trajectoryNeedsTransform else startPos
+
 
         # Create visualizer and set options
         # -------------------------------------
         self.vis = o3d.visualization.Visualizer()
         self.vis.create_window(width=1628, height=1028)
         self.ctr = self.vis.get_view_control()
-        self.parameters = o3d.io.read_pinhole_camera_parameters(CAMERA_PARAMS_FILE)
+        self.parameters = o3d.io.read_pinhole_camera_parameters(self.cameraFileParams)
         self.ctr.convert_from_pinhole_camera_parameters(self.parameters)
         self.prndr = self.vis.get_render_option()
         self.prndr.point_size = POINT_SIZE
-        self.prndr.line_width = 10
+        self.prndr.line_width = 50
         self.prndr.background_color = BACKGROUND_COLOR
         # rndr.mesh_show_wireframe = True
         # rndr.mesh_show_back_face = True
@@ -201,12 +280,13 @@ class SimulationEnv:
             self.agentInst = Ch("a")
             self.agentInst.init("")
 
-            startPosX_pfnnSystem, startPosY_pfnnSystem = convert2DPosFromPointCloudVisualizerToPFnn(self.startPos[0], self.startPos[2])
+            startPosX_pfnnSystem, startPosY_pfnnSystem = convert2DPosFromPointCloudVisualizerToPFnn(self.startPos[0],
+                                                                                                    self.startPos[2] if NEEDS_AXIS_INVERSION is True else self.startPos[1])
             self.agentInst.resetPos(startPosX_pfnnSystem, 0.0, startPosY_pfnnSystem)
             #self.agentInst.setTargetReachedThreshold(TARGET_REACHED_HACK_THRESHOLD)
             self.distanceReachedThreshold = max(self.agentInst.getTargetReachedThreshold(), 100)
 
-            self.YCorrection = self.startPos[1]
+            self.YCorrection = self.startPos[1] if NEEDS_AXIS_INVERSION else self.startPos[2]
 
             print("Agent name: ", self.agentInst.getName())
             print("Agent has: ", self.agentInst.getNumJoints(), " joints")
@@ -214,7 +294,7 @@ class SimulationEnv:
             self.PoseFrameFiles = ["VideoWork/pose0.txt", "VideoWork/pose1.txt", "VideoWork/pose2.txt",
                               "VideoWork/pose3.txt", "VideoWork/pose4.txt", "VideoWork/pose5.txt"]
 
-        self.frameIndex = START_FRAME_INDEX
+        #self.frameIndex = simData["START_FRAME_INDEX_ENV"]
         self.savedFrameCounter = 0
         self.nextTrajectoryIndex = INVALID_TRAJECTORY_INDEX
         self.lastPoseData = None
@@ -227,11 +307,14 @@ class SimulationEnv:
         # Read data first
         self.simdata_cars = simData["cars"]
         self.simdata_people = simData["people"]
+        self.heightOffset = simData["heightOffset"]
         assert (len(self.simdata_cars) == len(self.simdata_people))
-        self.simdata_numFrames = simData["numFramesToSimulate"] #len(self.simdata_cars)
+        self.simdata_endEnvSimFrame = simData["END_FRAME_INDEX_ENV"] #len(self.simdata_cars)
         self.simdata_frequency = simData["frequency"] # TODO PARAM
         self.simdata_recordFramerate =  simData["recordFramerate"]
+        self.frameIndex = simData["START_FRAME_INDEX_ENV"]
         self.deltaTime_inMySimulation = 1.0 / self.simdata_frequency
+        self.trajectoryNeedsTransform= simData["TRAJECTORY_NEEDS_TRANSFORM"]
 
         self.agentStartSimFrame = simData['agentStartSimFrame']
         self.agentStartRenderFrame = simData['agentStartRenderFrame']
@@ -239,17 +322,24 @@ class SimulationEnv:
         def rotScaleTransform(pos, R, S):
             pos = RotationMatrix.dot(pos)
             pos[0] *= ScaleFactor
+            pos[1] *= ScaleFactor
             pos[2] *= ScaleFactor
             return pos
 
         # Convert it to the vizualizer coordinate system
-        def convertBlenderSimDataListToPointCloudVizSystem(lst):
-            for frameItem in lst:
-                for itemIter in range(len(frameItem)):
-                    frameItem[itemIter] = frameItem[itemIter].astype(float).squeeze()
-                    entityPos = frameItem[itemIter].copy()
-                    entityPosTransf = rotScaleTransform(entityPos, RotationMatrix, ScaleFactor)
-                    frameItem[itemIter] = entityPosTransf
+        def convertBlenderSimDataListToPointCloudVizSystem(framedDict):
+            for frameItem, frameData in framedDict.items():
+                for itemKey, itemData in frameData.items():
+                    if not filterEntityId(itemKey):
+                        continue
+                    bboxMinMax = itemData['BBMinMax']
+
+                    minPos = bboxMinMax[:,0]
+                    maxPos = bboxMinMax[:, 1]
+                    itemData['BBMinMax'][:, 0] = rotScaleTransform(minPos, RotationMatrix, ScaleFactor)
+                    itemData['BBMinMax'][:, 1] = rotScaleTransform(maxPos, RotationMatrix, ScaleFactor)
+                    itemData['BBMinMax'][2, :] -= self.heightOffset
+                    minPos = minPos
 
         convertBlenderSimDataListToPointCloudVizSystem(self.simdata_cars)
         convertBlenderSimDataListToPointCloudVizSystem(self.simdata_people)
@@ -258,20 +348,24 @@ class SimulationEnv:
         self.carsGeom = []
 
     # Given either people or cars sim data, we interpolate and create the scene geometries for them then return
-    def createSimEntitiesFromData(self, simDataEntities, frameIndex, halfdimOfBBox, colorsList):
+    def createSimEntitiesFromData(self, simDataEntities, frameIndex, colorsList):
         geomResult = []
         simFrame = frameIndex #/ self.simdata_frequency
         #betweenFramesPercent = (simFrame % self.simdata_frequency) / self.simdata_frequency
         simDataEntities_f0 = simDataEntities[simFrame]
         #simDataEntities_f1 = simDataEntities[simFrame + 1] if simFrame + 1 < self.simdata_numFrames else simDataEntities_f0
 
-        for index, entityCenter in enumerate(simDataEntities_f0):
-            entityMin = entityCenter - halfdimOfBBox
-            entityMax = entityCenter + halfdimOfBBox
+        for entityKey, entityData in simDataEntities_f0.items():
+            if not filterEntityId(entityKey):
+                continue
+
+            entityBBox = entityData["BBMinMax"]
+            entityMin = entityBBox[:, 0]
+            entityMax = entityBBox[:, 1]
 
             entityGeom = o3d.geometry.AxisAlignedBoundingBox.create_from_points(o3d.utility.Vector3dVector([entityMin, entityMax]))
-            entityGeom.color = colorsList[index % len(colorsList)]
-            entityGeom.scale(scale=INV_SCALE_FACTOR, center=True)
+            entityGeom.color = colorsList[hash(entityKey) % len(colorsList)]
+            entityGeom.scale(scale=INV_SCALE_FACTOR, center=np.array([0,0,0]))
             geomResult.append(entityGeom)
 
         return geomResult
@@ -302,8 +396,22 @@ class SimulationEnv:
         '''
 
         # If we target a max number of frames stop the simulation after
-        if self.simdata_numFrames == None or self.frameIndex >= self.simdata_numFrames:
-            return
+        if self.simdata_endEnvSimFrame == None or self.frameIndex >= self.simdata_endEnvSimFrame:
+            return False
+
+        # Should i load a new point cloud every frame ?
+        if self.isFixedEnvironment == False:
+            framePCD = readPCDFromPath(self.cloudDataPath, self.frameIndex, useSegView=self.useSegmentationView, allowToFail=True)
+            if framePCD == None:
+                return False# No more cloud file for simulation ? exit
+            
+            self.vis.remove_geometry(self.pcd)
+            self.pcd = framePCD
+
+            self.vis.add_geometry(self.pcd)
+            self.ctr = self.vis.get_view_control()
+            self.parameters = o3d.io.read_pinhole_camera_parameters(self.cameraFileParams)
+            self.ctr.convert_from_pinhole_camera_parameters(self.parameters)
 
         # Remove the previously created geometry and create/add the new ones
         # We do this because their number is very different from frame to frame and there is no much optimization opportunity..
@@ -313,53 +421,122 @@ class SimulationEnv:
         for geom in self.carsGeom:
             self.vis.remove_geometry(geom, reset_bounding_box=False)
 
-        self.carsGeom   = self.createSimEntitiesFromData(self.simdata_cars, self.frameIndex, np.array([40, 15, 40]), Cars_Colors)
-        self.peopleGeom = self.createSimEntitiesFromData(self.simdata_people, self.frameIndex, np.array([20, 25, 20]), Pedestrians_Colors)
+        # BBOX Sizes from citiscapes - TODO: move them in processed data as bboxes similar to waymo now: cars np.array([40, 15, 40], np.array([20, 25, 20]
+
+        self.carsGeom   = self.createSimEntitiesFromData(self.simdata_cars, self.frameIndex, Cars_Colors)
+        self.peopleGeom = self.createSimEntitiesFromData(self.simdata_people, self.frameIndex, Pedestrians_Colors)
 
         for geom in self.carsGeom:
             self.vis.add_geometry(geom, reset_bounding_box=False)
         for geom in self.peopleGeom:
             self.vis.add_geometry(geom, reset_bounding_box=False)
 
+        return True
+
     # If given, recordingZPosStart will start recording from that Z forward
     def simulatePFNNOnCloudDataTrajectory(self, trajectory, speeds, recordingZPosStart = None, recordingFrameIndex = None, save = False):
+        global SAVE_POSE_HISTORY # TODO : put these as parameters...
+        global MAX_POSES_IN_HIST
+        global g_poseHistory
+
         # Transform trajectory points to data cloud coordinate reference
         self.fixedTrajectory = trajectory.copy()
         self.fixedSpeeds = speeds.copy()
-        transformTrajectoryPointsFromBlenderToPointCloudVis(self.fixedTrajectory)
+
+        if self.trajectoryNeedsTransform == True:
+            transformTrajectoryPointsFromBlenderToPointCloudVis(self.fixedTrajectory)
 
         # Render trajectory points
-        if SHOW_TRAJECTORY_POINTS:
-            for pos3d in self.fixedTrajectory:
-                mesh_box = o3d.geometry.TriangleMesh.create_box(width=0.3, height=0.3, depth=0.3)
-                mesh_box.translate(pos3d)
-                self.vis.add_geometry(mesh_box)
+        if SHOW_TRAJECTORY_WAYPOINTS:
+            trajectoriesToShow = [self.fixedTrajectory]
+            # Again, these should be enabled only for image visualization debugging
+            if SHOW_TRAJECTORIES_FOR_VIS is not None and len(SHOW_TRAJECTORIES_FOR_VIS) > 0:
+                trajectoriesToShow = SHOW_TRAJECTORIES_FOR_VIS
+
+            # Trajectories waypoints
+            prevPos = None
+            for trajIdx, T in enumerate(trajectoriesToShow):
+                for pointIdx, pos3d in enumerate(T):
+                    mesh_box = o3d.geometry.TriangleMesh.create_box(width=1.3, height=1.3, depth=1.3)
+                    mesh_box.translate(pos3d)
+                    self.vis.add_geometry(mesh_box)
+
+                    line_set = LineSetCustom.LineMesh(points=SHOW_TRAJECTORIES_FOR_VIS[trajIdx], lines=None,
+                                                        colors=SHOW_TRAJECTORIES_FOR_VIS_COLORS[trajIdx], radius=0.25)
+                    for cylinder in line_set.cylinder_segments:
+                        self.vis.add_geometry(cylinder)
+
 
         # Set camera params again !
         self.ctr = self.vis.get_view_control()
-        self.parameters = o3d.io.read_pinhole_camera_parameters(CAMERA_PARAMS_FILE)
+        self.parameters = o3d.io.read_pinhole_camera_parameters(self.cameraFileParams)
         self.ctr.convert_from_pinhole_camera_parameters(self.parameters)
 
         #if outPath == None:
         #    vis.run()
+        self.updateEnvironment(self.frameIndex)
+
+
+        # Special case to add several geometries from HISTORY list for image visualization
+        # SHould be null in general !!
+        global REPLAY_POSES_HISTORY_LIST
+        if REPLAY_POSES_HISTORY_LIST is not None and len(REPLAY_POSES_HISTORY_LIST) > 0:
+            # First read all poses
+            for posesPath in REPLAY_POSES_HISTORY_LIST:
+                with open(posesPath, "rb") as fileHandle:
+                    posesDict = pickle.load(fileHandle)
+                    for key,value in posesDict.items():
+                        if key not in g_poseHistory:
+                            g_poseHistory[key] = []
+                        g_poseHistory[key].append(np.array(value))
+
+            # For each frame data
+            for pose_frameIndex, poseListData in g_poseHistory.items():
+                if REPLAY_MIN_FRAME_ID > pose_frameIndex or pose_frameIndex > REPLAY_MAX_FRAME_ID:
+                    continue
+                if pose_frameIndex % REPLAY_FRAMESKIP != 0:
+                    continue
+
+                # For each pose data saved on this frame
+                for poseData in poseListData:
+                    # Create its geometry (added to the visualizer as well)
+                    self.poseGeometries, self.poseGeometries_originalCoords = createOpen3DPoseGeometry(self.vis)
+
+                    setPoseDataToGeometry(poseData, self.poseGeometries, self.poseGeometries_originalCoords, -self.heightOffset)
+
+                    # Update visualization to reflect the new posed data
+                    for poseGeom in self.poseGeometries:
+                        self.vis.update_geometry(poseGeom)
+
+        self.ctr = self.vis.get_view_control()
+        self.parameters = o3d.io.read_pinhole_camera_parameters(self.cameraFileParams)
+        self.ctr.convert_from_pinhole_camera_parameters(self.parameters)
+        ############################################################################
 
         self.vis.run()
 
+        isPFNNEnabled = True
         isSimOver = False
         while not isSimOver:
-            self.updateEnvironment(self.frameIndex)
+            print("----- Sim Frame ", self.frameIndex)
 
-            if self.frameIndex >= self.agentStartSimFrame:
-                isSimOver = isSimOver or self.simulateFrame()
-                poseData = self.getNextPoseFromStream()
+            res = self.updateEnvironment(self.frameIndex)
 
-            if self.frameIndex >= min(self.agentStartRenderFrame, self.agentStartSimFrame):
-                # BEGIN POSE HACK
-                setPoseDataToGeometry(poseData, self.poseGeometries, self.poseGeometries_originalCoords, self.YCorrection)
-                # END POSE HACK
+            if isPFNNEnabled:
+                if self.frameIndex >= self.agentStartSimFrame:
+                    isSimOver = isSimOver or self.simulateFrame()
+                    poseData = self.getNextPoseFromStream()
 
-            for poseGeom in self.poseGeometries:
-                self.vis.update_geometry(poseGeom)
+                if self.frameIndex >= min(self.agentStartRenderFrame, self.agentStartSimFrame):
+                    # BEGIN POSE HACK
+                    setPoseDataToGeometry(poseData, self.poseGeometries, self.poseGeometries_originalCoords, self.YCorrection)
+
+                    if SAVE_POSE_HISTORY:
+                        g_poseHistory[self.frameIndex] = list(poseData.copy())
+                    # END POSE HACK
+
+                for poseGeom in self.poseGeometries:
+                    self.vis.update_geometry(poseGeom)
 
             self.vis.poll_events()
             self.vis.update_renderer()
@@ -374,13 +551,22 @@ class SimulationEnv:
 
                 self.savedFrameCounter += 1
 
-            time.sleep(self.deltaTime_inMySimulation)
+            #time.sleep(self.deltaTime_inMySimulation)
             self.frameIndex += 1
+
+            if res == False and isPFNNEnabled == False:
+                isSimOver = True
+
+            if  SAVE_POSE_HISTORY and (isSimOver or self.frameIndex >= (5 + MAX_POSES_IN_HIST)):
+                savePoseHistory()
+                SAVE_POSE_HISTORY = False
+                exit(0)
+
 
         self.vis.destroy_window()
         if save == True:
-            #command = "ffmpeg -framerate 10 -i" +" 'frame_%05d.png'" + " -c:v libx264 -vf 'pad=ceil(iw/2)*2:ceil(ih/2)*2' -pix_fmt yuv420p out.mp4"
-            command = "ffmpeg -y -framerate " + str(self.simdata_recordFramerate) + " -i 'VideoWork/Output/frame_%05d.png' -c:v libx264 -vf 'pad=ceil(iw/2)*2:ceil(ih/2)*2' -pix_fmt yuv420p out.mp4"
+            #command = "ffmpeg -framerate 10 -i" +" 'frame_%05d.png'" + " -c:v libx264 -vf 'pad=ceil(iw/2)*2:ceil(ih/2)*2' -pix_fmt yuv420p VideoWork/Output/out.mp4"
+            command = "ffmpeg -y -framerate " + str(self.simdata_recordFramerate) + " -i " + 'VideoWork/Output/frame_%05d.png' + " -c:v libx264 -vf 'pad=ceil(iw/2)*2:ceil(ih/2)*2' -pix_fmt yuv420p VideoWork/Output/out.mp4"
             print(command)
             subprocess.call(command, shell=True)
 
@@ -409,10 +595,13 @@ class SimulationEnv:
             agentX, agentZ = convert2DPosFromPFnnToPointCloudVisualizer(agentX_pfnnSystem, agentZ_pfnnSystem)
             DEBUG_LOG("Current Agent pos: in PFNN system: {0:02f},{1:02f}. in PointCloud vizualizer system pos: {2:02f},{3:02f}".format(agentX_pfnnSystem, agentZ_pfnnSystem, agentX, agentZ))
 
+            # NOTE: IF NEEDS_AXIS_INVERSION is False, names containing Z below are actually Y !  Z is up in this case, Y forward!!
+            # However, this is convinient since in PFNN Z is forward, Y being up..
             targetX_inPFNNSystem, targetZ_inPFNNSystem = None, None
             if self.nextTrajectoryIndex != INVALID_TRAJECTORY_INDEX:
                 targetPos = self.fixedTrajectory[self.nextTrajectoryIndex]
-                targetX_inPFNNSystem, targetZ_inPFNNSystem = convert2DPosFromPointCloudVisualizerToPFnn(targetPos[0], targetPos[2])
+                targetX_inPFNNSystem, targetZ_inPFNNSystem = convert2DPosFromPointCloudVisualizerToPFnn(targetPos[0],
+                                                                                                        targetPos[2] if NEEDS_AXIS_INVERSION == True else targetPos[1])
 
             # If we don't have a target selected yet or we are close to our next target location, then choose the next one
             actualDistance = None if (targetX_inPFNNSystem == None or targetZ_inPFNNSystem == None) else distance2D(agentX_pfnnSystem, agentZ_pfnnSystem, targetX_inPFNNSystem, targetZ_inPFNNSystem)
@@ -425,8 +614,7 @@ class SimulationEnv:
                 targetPos = self.fixedTrajectory[self.nextTrajectoryIndex]
                 # HACK - MOVE TARGET FORWARD BUT IN THE SAME MOVEMENT DIRECTION BECAUSE OF A PFNN BUG :(
                 targetPos_X = (targetPos[0] - agentX)*100.0 + agentX
-                targetPos_Z = (targetPos[2] - agentZ)*100.0 + agentZ
-
+                targetPos_Z = ((targetPos[2] if NEEDS_AXIS_INVERSION == True else targetPos[1]) - agentZ)*100.0 + agentZ
 
                 targetX_inPFNNSystem, targetZ_inPFNNSystem = convert2DPosFromPointCloudVisualizerToPFnn(targetPos_X, targetPos_Z)
                 self.agentInst.setTargetPosition(targetX_inPFNNSystem, targetZ_inPFNNSystem)
@@ -531,23 +719,44 @@ def main():
     #outTransformer_aachen000042 = ImgTransformer(cropX=511, cropY=428, cropW=561, cropH=486, scaleFactor=2.0)
     ################################################################
 
+    SIMULATE_TUBINGEN = False
+    SIMULATE_WAYMO = True
 
+    if SIMULATE_TUBINGEN:
+        ################# DATA FOR TUBINGEN 000112 PATHS ######################
+        pointCloudDataPath = pointCloudDataPath_Tubingen_000112
+        startPos = startPos_tubingen
+        trajectory = trajectory_tubingen_000112_2
+        speeds = speeds_tubingen_000112_2
 
-    ################# DATA FOR TUBINGEN 000112 PATHS ######################
-    pointCloudDataPath = pointCloudDataPath_Tubingen_000112
-    startPos = startPos_tubingen
-    trajectory = trajectory_tubingen_000112_2
-    speeds = speeds_tubingen_000112_2
+        simData = simData_tubingen # Can be NONE
+        outTransformer_tubingen = ImgTransformer(cropX=487, cropY=425, cropW=1001, cropH=533, scaleFactor=2.0)
+        ################################################################
 
-    simData = simData_tubingen # Can be NONE
-    outTransformer_tubingen = ImgTransformer(cropX=487, cropY=425, cropW=1001, cropH=533, scaleFactor=2.0)
-    ################################################################
+        outTransformer = outTransformer_tubingen
 
-    outTransformer = outTransformer_tubingen
+        simEnv = SimulationEnv()
+        simEnv.initEnv(CAMERA_PARAMS_FILE_TUBINGEN, pointCloudDataPath, simData, startPos, SimulationType.PFNN_SIMULATION, outTransformer)
+        simEnv.simulatePFNNOnCloudDataTrajectory(trajectory, speeds, recordingZPosStart = None, recordingFrameIndex = 0, save = False)
+    elif SIMULATE_WAYMO:
+        simData = simData_Waymo
 
-    simEnv = SimulationEnv()
-    simEnv.initEnv(pointCloudDataPath, simData, startPos, SimulationType.PFNN_SIMULATION, outTransformer)
-    simEnv.simulatePFNNOnCloudDataTrajectory(trajectory, speeds, recordingZPosStart = None, recordingFrameIndex = 0, save = False)
+        startPos = simData["SIM_AGENT_START_POS"]
+        trajectory = simData["SIM_AGENT_TRAJECTORY"]
+        speeds = simData["SIM_AGENT_SPEEDS"]
+
+        outTransformer_Waymo = ImgTransformer(cropX=simData["SAVE_PARAMS"]["CROP_X"],
+                                              cropY=simData["SAVE_PARAMS"]["CROP_Y"],
+                                              cropW=simData["SAVE_PARAMS"]["CROP_WIDTH"],
+                                              cropH=simData["SAVE_PARAMS"]["CROP_HEIGHT"],
+                                              scaleFactor=simData["SAVE_PARAMS"]["SCALE_FACTOR"]) # TODO put these on params file
+        ################################################################
+
+        outTransformer = outTransformer_Waymo
+
+        simEnv = SimulationEnv()
+        simEnv.initEnv(simData["CameraFile"], simData, startPos, SimulationType.PFNN_SIMULATION, outTransformer)
+        simEnv.simulatePFNNOnCloudDataTrajectory(trajectory, speeds, recordingZPosStart = None, recordingFrameIndex = 0, save = simData["SAVE_PARAMS"]["ENABLED"])
 
 
 if __name__== "__main__":
