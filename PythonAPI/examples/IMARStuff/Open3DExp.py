@@ -24,18 +24,16 @@ def filterEntityId(id):
 
 
 # PARAMS FOR saving the history of poses
+# AND REPLAYING THE POSES FOR VISUALIZATION - TODO REFACTOR THIS
 #--------------------------------------------------
-SAVE_POSE_HISTORY = True
-MAX_POSES_IN_HIST = 150
 g_poseHistory = {} # frame id to pose list of 31 bones
 
-def savePoseHistory():
-    fullPath = os.path.join(OUT_VIS_FOLDER, "posesHist.pkl")
+def savePoseHistory(outVisFolder):
+    fullPath = os.path.join(outVisFolder, "posesHist.pkl")
     with open(fullPath, "wb") as fileHandle:
         pickle.dump(g_poseHistory, fileHandle)
 
 # TODO: parametrize this + output folders above !!
-
 """
 REPLAY_POSES_HISTORY_LIST = [os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj1, "posesHist.pkl"),
                                 os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj2, "posesHist.pkl"),
@@ -52,12 +50,12 @@ REPLAY_POSES_HISTORY_LIST = [os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb
                                 os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj2, "posesHist.pkl"),
                                 os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj3, "posesHist.pkl")]
                                 
-"""
+
 REPLAY_POSES_HISTORY_LIST = [os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_seg_traj1, "posesHist.pkl"),
                                 os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_seg_traj2, "posesHist.pkl"),
                                 os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_seg_traj3, "posesHist.pkl")]    
-
-#REPLAY_POSES_HISTORY_LIST = None
+"""
+REPLAY_POSES_HISTORY_LIST = None
 
 REPLAY_MIN_FRAME_ID = 20
 REPLAY_MAX_FRAME_ID = 130
@@ -319,6 +317,8 @@ class SimulationEnv:
         self.agentStartSimFrame = simData['agentStartSimFrame']
         self.agentStartRenderFrame = simData['agentStartRenderFrame']
 
+        self.outVisFolder = simData["SAVE_PARAMS"]["OUT_VIS_FOLDER"]
+
         def rotScaleTransform(pos, R, S):
             pos = RotationMatrix.dot(pos)
             pos[0] *= ScaleFactor
@@ -515,14 +515,13 @@ class SimulationEnv:
 
         self.vis.run()
 
-        isPFNNEnabled = True
-        isSimOver = False
+        isSimOver = not VIEW_ENVIRONMENT_SIMULATION == True
         while not isSimOver:
             print("----- Sim Frame ", self.frameIndex)
 
             res = self.updateEnvironment(self.frameIndex)
 
-            if isPFNNEnabled:
+            if IS_PFNN_ENABLED:
                 if self.frameIndex >= self.agentStartSimFrame:
                     isSimOver = isSimOver or self.simulateFrame()
                     poseData = self.getNextPoseFromStream()
@@ -543,7 +542,7 @@ class SimulationEnv:
 
             if save == True:
                 if (recordingZPosStart != None and np.asarray(self.poseGeometries[0].vertices)[0][2] < recordingZPosStart) or (recordingFrameIndex <= self.frameIndex):
-                    outPath = os.path.join(OUT_VIS_FOLDER, "frame_{0:05d}.png".format(self.savedFrameCounter))
+                    outPath = os.path.join(self.outVisFolder, "frame_{0:05d}.png".format(self.savedFrameCounter))
                     self.vis.capture_screen_image(outPath, True)
 
                 if self.outputTransformer:
@@ -551,14 +550,14 @@ class SimulationEnv:
 
                 self.savedFrameCounter += 1
 
-            #time.sleep(self.deltaTime_inMySimulation)
+            time.sleep(self.deltaTime_inMySimulation)
             self.frameIndex += 1
 
-            if res == False and isPFNNEnabled == False:
+            if res == False and IS_PFNN_ENABLED == False:
                 isSimOver = True
 
             if  SAVE_POSE_HISTORY and (isSimOver or self.frameIndex >= (5 + MAX_POSES_IN_HIST)):
-                savePoseHistory()
+                savePoseHistory(self.outVisFolder)
                 SAVE_POSE_HISTORY = False
                 exit(0)
 
@@ -566,7 +565,7 @@ class SimulationEnv:
         self.vis.destroy_window()
         if save == True:
             #command = "ffmpeg -framerate 10 -i" +" 'frame_%05d.png'" + " -c:v libx264 -vf 'pad=ceil(iw/2)*2:ceil(ih/2)*2' -pix_fmt yuv420p VideoWork/Output/out.mp4"
-            command = "ffmpeg -y -framerate " + str(self.simdata_recordFramerate) + " -i " + 'VideoWork/Output/frame_%05d.png' + " -c:v libx264 -vf 'pad=ceil(iw/2)*2:ceil(ih/2)*2' -pix_fmt yuv420p VideoWork/Output/out.mp4"
+            command = "ffmpeg -y -framerate " + str(self.simdata_recordFramerate) + " -i " + os.path.join('VideoWork', self.outVisFolder) + '/frame_%05d.png' + " -c:v libx264 -vf 'pad=ceil(iw/2)*2:ceil(ih/2)*2' -pix_fmt yuv420p VideoWork/Output/out.mp4"
             print(command)
             subprocess.call(command, shell=True)
 
