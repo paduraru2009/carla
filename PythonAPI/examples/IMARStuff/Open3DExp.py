@@ -109,7 +109,7 @@ def createOpen3DPoseGeometry(visGeomSet):
         if parents[i] == -1:
             continue
 
-        mesh_box = o3d.geometry.TriangleMesh.create_box(width=0.4, height = 0.4, depth=0.4)
+        mesh_box = o3d.geometry.TriangleMesh.create_box(width=0.3, height = 0.3, depth=0.3)
         mesh_box.compute_vertex_normals()
         poseGeometries_originalVertices = np.copy(mesh_box.vertices)
 
@@ -310,7 +310,14 @@ class SimulationEnv:
         self.simdata_endEnvSimFrame = simData["END_FRAME_INDEX_ENV"] #len(self.simdata_cars)
         self.simdata_frequency = simData["frequency"] # TODO PARAM
         self.simdata_recordFramerate =  simData["recordFramerate"]
-        self.frameIndex = simData["START_FRAME_INDEX_ENV"]
+
+        # We want to render the agent at the time specified by agentStartRenderFrame in parallel with environment.
+        # Since there is a possible delay between sim and rendering of the agent we might have to start the simulation at negative frame indices
+        envStartUpdateFrame = simData["START_FRAME_INDEX_ENV"]
+        self.frameIndex = min(envStartUpdateFrame, simData["agentStartSimFrame"])
+
+
+
         self.deltaTime_inMySimulation = 1.0 / self.simdata_frequency
         self.trajectoryNeedsTransform= simData["TRAJECTORY_NEEDS_TRANSFORM"]
 
@@ -373,27 +380,9 @@ class SimulationEnv:
     # Adds, remove, simulate other info for environments such as cars and pedestrians
     # Giving the simFrame and the time to interpolate between in the given frame to the next
     def updateEnvironment(self, simFrame):
-        '''
-        points = np.array([
-            [0, 0, 0],
-            [1, 0, 0],
-            [0, 1, 0],
-            [1, 1, 0],
-            [0, 0, 1],
-            [1, 0, 1],
-            [0, 1, 1],
-            [1, 1, 1],
-        ])
-
-        RotY = rotateAroundAxis(1, np.pi/2)
-        for i in range(points.shape[0]):
-            points[i] = RotY.dot(points[i])
-
-        carGeomTest = o3d.geometry.OrientedBoundingBox.create_from_points(o3d.utility.Vector3dVector(points))
-        self.vis.add_geometry(carGeomTest, reset_bounding_box=False)
-        #bbox = o3d.geometry.AxisAlignedBoundingBox.create_from_points(o3d.utility.Vector3dVector(points))
-        return
-        '''
+        # The simulation has not started yet
+        if simFrame <= 0:
+            return True
 
         # If we target a max number of frames stop the simulation after
         if self.simdata_endEnvSimFrame == None or self.frameIndex >= self.simdata_endEnvSimFrame:
@@ -446,26 +435,38 @@ class SimulationEnv:
         if self.trajectoryNeedsTransform == True:
             transformTrajectoryPointsFromBlenderToPointCloudVis(self.fixedTrajectory)
 
-        # Render trajectory points
-        if SHOW_TRAJECTORY_WAYPOINTS:
-            trajectoriesToShow = [self.fixedTrajectory]
+        # Render trajectory points for debugging or visualization
+        if SHOW_TRAJECTORY_DEBUG:
             # Again, these should be enabled only for image visualization debugging
-            if SHOW_TRAJECTORIES_FOR_VIS is not None and len(SHOW_TRAJECTORIES_FOR_VIS) > 0:
+            shouldShowMultipleTrajectories = (SHOW_TRAJECTORIES_FOR_VIS is not None and len(SHOW_TRAJECTORIES_FOR_VIS) > 0)
+            if shouldShowMultipleTrajectories:
                 trajectoriesToShow = SHOW_TRAJECTORIES_FOR_VIS
+                trajectoriesToShow_colors = SHOW_TRAJECTORIES_FOR_VIS_COLORS
+            else:
+                trajectoriesToShow = [self.fixedTrajectory] # Showing only the current trajectory path
+                trajectoriesToShow_colors = [1.0, 1.0, 0.0]
 
-            # Trajectories waypoints
-            prevPos = None
-            for trajIdx, T in enumerate(trajectoriesToShow):
-                for pointIdx, pos3d in enumerate(T):
-                    mesh_box = o3d.geometry.TriangleMesh.create_box(width=1.3, height=1.3, depth=1.3)
-                    mesh_box.translate(pos3d)
-                    self.vis.add_geometry(mesh_box)
+                # Trajectories waypoints
+                prevPos = None
+                for trajIdx, T in enumerate(trajectoriesToShow):
+                    for pointIdx, pos3d in enumerate(T):
+                        mesh_box = o3d.geometry.TriangleMesh.create_box(width=0.5, height=0.5, depth=0.5)
+                        mesh_box.translate(pos3d)
+                        self.vis.add_geometry(mesh_box)
 
-                    line_set = LineSetCustom.LineMesh(points=SHOW_TRAJECTORIES_FOR_VIS[trajIdx], lines=None,
-                                                        colors=SHOW_TRAJECTORIES_FOR_VIS_COLORS[trajIdx], radius=0.25)
-                    for cylinder in line_set.cylinder_segments:
-                        self.vis.add_geometry(cylinder)
+                        pointsList = trajectoriesToShow[trajIdx] if shouldShowMultipleTrajectories else trajectoriesToShow[trajIdx][1:] # because the first point is a bit faked to allow the agent to move a bit
+                        line_set = LineSetCustom.LineMesh(points=pointsList, lines=None,
+                                                            colors=trajectoriesToShow_colors, radius=0.25)
+                        for cylinder in line_set.cylinder_segments:
+                            self.vis.add_geometry(cylinder)
 
+        # Should i show the goal ?
+        if SHOW_GOAL_DEBUG:
+            mesh_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=1.5)
+            mesh_sphere.compute_vertex_normals()
+            mesh_sphere.paint_uniform_color([1.0, 0.0, 0.0])
+            mesh_sphere.translate(self.fixedTrajectory[-1]) # Last point on the trajectory
+            self.vis.add_geometry(mesh_sphere)
 
         # Set camera params again !
         self.ctr = self.vis.get_view_control()
@@ -519,14 +520,18 @@ class SimulationEnv:
         while not isSimOver:
             print("----- Sim Frame ", self.frameIndex)
 
-            res = self.updateEnvironment(self.frameIndex)
+            # Sometimes for faster execution we might disable the environment
+            if IS_ENVIRONMENT_UPDATING_ENABLED:
+                res = self.updateEnvironment(self.frameIndex)
+            else:
+                res = True
 
             if IS_PFNN_ENABLED:
                 if self.frameIndex >= self.agentStartSimFrame:
                     isSimOver = isSimOver or self.simulateFrame()
                     poseData = self.getNextPoseFromStream()
 
-                if self.frameIndex >= min(self.agentStartRenderFrame, self.agentStartSimFrame):
+                if self.frameIndex >= max(self.agentStartRenderFrame, self.agentStartSimFrame):
                     # BEGIN POSE HACK
                     setPoseDataToGeometry(poseData, self.poseGeometries, self.poseGeometries_originalCoords, self.YCorrection)
 
@@ -545,15 +550,14 @@ class SimulationEnv:
                     outPath = os.path.join(self.outVisFolder, "frame_{0:05d}.png".format(self.savedFrameCounter))
                     self.vis.capture_screen_image(outPath, True)
 
-                if self.outputTransformer:
-                    self.outputTransformer.transform(outPath, outPath)
-
-                self.savedFrameCounter += 1
+                    if self.outputTransformer:
+                        self.outputTransformer.transform(outPath, outPath)
+                    self.savedFrameCounter += 1
 
             time.sleep(self.deltaTime_inMySimulation)
             self.frameIndex += 1
 
-            if res == False and IS_PFNN_ENABLED == False:
+            if res == False and (IS_PFNN_ENABLED == False or STOP_PFNN_WHEN_ENVIRONMENT_UPDATE_ENDS == True):
                 isSimOver = True
 
             if  SAVE_POSE_HISTORY and (isSimOver or self.frameIndex >= (5 + MAX_POSES_IN_HIST)):
@@ -565,7 +569,7 @@ class SimulationEnv:
         self.vis.destroy_window()
         if save == True:
             #command = "ffmpeg -framerate 10 -i" +" 'frame_%05d.png'" + " -c:v libx264 -vf 'pad=ceil(iw/2)*2:ceil(ih/2)*2' -pix_fmt yuv420p VideoWork/Output/out.mp4"
-            command = "ffmpeg -y -framerate " + str(self.simdata_recordFramerate) + " -i " + os.path.join('VideoWork', self.outVisFolder) + '/frame_%05d.png' + " -c:v libx264 -vf 'pad=ceil(iw/2)*2:ceil(ih/2)*2' -pix_fmt yuv420p VideoWork/Output/out.mp4"
+            command = "ffmpeg -y -framerate " + str(self.simdata_recordFramerate) + " -i " + self.outVisFolder + '/frame_%05d.png' + " -c:v libx264 -vf pad=ceil(iw/2)*2:ceil(ih/2)*2 -pix_fmt yuv420p VideoWork/Output/out.mp4"
             print(command)
             subprocess.call(command, shell=True)
 

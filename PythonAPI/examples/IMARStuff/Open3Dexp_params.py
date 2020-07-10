@@ -27,8 +27,6 @@ else:
     NEEDS_AXIS_INVERSION = False
 
 SHOW_COORDINATE_AXIS = True
-SHOW_TRAJECTORY_WAYPOINTS = True
-
 BACKGROUND_COLOR = [0.27, 0.27, 0.27]
 INV_SCALE_FACTOR = 1.0 / SCALE_FACTOR
 POSE_SCALE_FACTOR = 0.065
@@ -41,7 +39,8 @@ CAMERA_PARAMS_FILE_TUBINGEN = "ScreenCamera_2020-03-12-07-54-53.json" #"ScreenCa
 
 
 class Trajectory:
-    def __init__(self, outVisFolder, trajectoryPoints, trajectorySpeeds, trajectoryColors):
+    # directionComingFrom : used to say where was the agent coming from previously , before starting to render. this helps to get the impression that the agent was actually moving before showing something
+    def __init__(self, outVisFolder, trajectoryPoints, trajectorySpeeds, trajectoryColors, directionComingFrom=None):
         self.OUT_VIS_FOLDER = outVisFolder      # Visualization folder
         if not os.path.exists(self.OUT_VIS_FOLDER):
             os.makedirs(self.OUT_VIS_FOLDER)
@@ -49,6 +48,7 @@ class Trajectory:
         self.TRAJECTORY_POINTS = trajectoryPoints   # The trajectory
         self.TRAJECTORY_SPEEDS = trajectorySpeeds   # Speeds along trajectory
         self.TRAJECTORY_COLOR = trajectoryColors    # RGB list for this
+        self.DIRECTION_COMING_FROM = directionComingFrom
 
 class SceneConfig:
     def __init__(self, baseResourcesPath, cameraParamsFile, outputSaveParams):
@@ -379,7 +379,7 @@ def createSceneSimParams(sceneConfig : SceneConfig,
     # simdata_cars = processWaymoSimData(simdata_cars)
 
     # Position of the agent after simulation (from real data) frame ends
-    agentStartFrame = END_FRAME_INDEX_ENV - 1
+    #agentStartFrame = END_FRAME_INDEX_ENV - 1
     #agentNameToFollow = list(simdata_people[agentStartFrame].keys())[0]  # '0U-i9Ibvlvz8tGCusPra1w'
     #minMaxPos = simdata_people[agentStartFrame][agentNameToFollow]['BBMinMax']
     #startPos = trajectoryToSimulate_points[0]  # (minMaxPos[:, 0] + minMaxPos[:, 1]) * 0.5
@@ -387,7 +387,12 @@ def createSceneSimParams(sceneConfig : SceneConfig,
 
     # Faked traj behind a bit
     startPos = trajectoryToSimulate_points[0].copy()
-    startPos[0] -= 10.0  # Move a bit behind for start
+
+    # Offset the starting pos with the direction coming from
+    if trajectoryConfig.DIRECTION_COMING_FROM is not None:
+        for i in range(0,3):
+            startPos[i] += trajectoryConfig.DIRECTION_COMING_FROM[i]
+
     trajectoryToSimulate_points = np.concatenate(([startPos], trajectoryToSimulate_points))
     trajectoryToSimulate_speeds = np.concatenate(([trajectoryToSimulate_speeds[0].copy()], trajectoryToSimulate_speeds))
 
@@ -397,10 +402,10 @@ def createSceneSimParams(sceneConfig : SceneConfig,
             'USE_SEGMENTATION_VIEW' : useSegmentationView,
             'heightOffset' : heightOffset,
             'frequency' : 17,
-            'START_FRAME_INDEX_ENV' : START_FRAME_INDEX_ENV,
-            'END_FRAME_INDEX_ENV' : END_FRAME_INDEX_ENV,
-            'agentStartSimFrame' : AGENT_START_SIM_FRAME,
-            'agentStartRenderFrame':START_FRAME_INDEX_AGENT_PFNN,
+            'START_FRAME_INDEX_ENV' : START_ENVSIM_FRAME_INDEX,
+            'END_FRAME_INDEX_ENV' : END_ENVSIM_FRAME_INDEX,
+            'agentStartSimFrame' : START_AGENTSIM_FRAME_INDEX,
+            'agentStartRenderFrame':START_AGENTRENDER_FRAME_INDEX,
             'recordFramerate' : 17,
             'IS_FIXED_ENVIRONMENT' : False,
             'EnvironmentPointCloudPath' : sceneBasePath,
@@ -420,16 +425,22 @@ SAVE_POSE_HISTORY = False
 MAX_POSES_IN_HIST = 150
 
 # If you want to see any skeleton simulation activate this
-IS_PFNN_ENABLED = False
+IS_PFNN_ENABLED = True
+IS_ENVIRONMENT_UPDATING_ENABLED = True
+STOP_PFNN_WHEN_ENVIRONMENT_UPDATE_ENDS = False # if the env has N frames, then the PFNN will be stopped at the same time with the environment. Otherwise it will continue
+
+SHOW_TRAJECTORY_DEBUG = False # I enabled will show the trajectory. If those below are neabled, all trajectories will be rendered not only the current one
+SHOW_GOAL_DEBUG = False # It will show the goal of the trajectory
 
 # If you want to see simulation or just visualization of the environment. Used for faster views
 VIEW_ENVIRONMENT_SIMULATION = True
 
+START_ENVSIM_FRAME_INDEX = 0 # At which frame to start the simulation of the environment
+END_ENVSIM_FRAME_INDEX = 200 # At which frame to end the simulation of the environment
 
-START_FRAME_INDEX_ENV = 0 # At which frame to start the simulation of the environment
-END_FRAME_INDEX_ENV = 300
-START_FRAME_INDEX_AGENT_PFNN = END_FRAME_INDEX_ENV # At which frame to start the PFNN simulation
-AGENT_START_SIM_FRAME = START_FRAME_INDEX_AGENT_PFNN - 5  # agentStartSimFrame is before END_SIM_FRAME SINCE IT NEEDS SOME INIT TIME TO START and look like walking not idle
+START_AGENTRENDER_DELAYFROMSIM = 10     #  IT NEEDS SOME INIT TIME TO START and look like walking not idle or rotating towards a target
+START_AGENTRENDER_FRAME_INDEX = 0       # AT WHICH TIME IN PARALLEL WITH Environment situation we start to render the agent
+START_AGENTSIM_FRAME_INDEX = START_AGENTRENDER_FRAME_INDEX - START_AGENTRENDER_DELAYFROMSIM # At which frame should we start the agent simulation to have a proper rendering when the environment updates
 
 
 # SCENES DEFINITIONS AND SIM FOR WAYMO
@@ -438,7 +449,7 @@ AGENT_START_SIM_FRAME = START_FRAME_INDEX_AGENT_PFNN - 5  # agentStartSimFrame i
 Waymo_Scene18311 = SceneConfig(baseResourcesPath = "C:/Users/Ciprian/OneDrive - University of Bucharest, Faculty of Mathematics and Computer Science/IMAR_Work/New folder/Scene18311",
                                cameraParamsFile = "ScreenCamera_2020-07-08-11-21-42.json",
                                outputSaveParams = {
-                                                    "ENABLED": 0,
+                                                    "ENABLED": 1,
                                                     "CROP_X": 0,
                                                     "CROP_Y": 407,
                                                     "CROP_WIDTH": 1620,
@@ -448,24 +459,28 @@ Waymo_Scene18311 = SceneConfig(baseResourcesPath = "C:/Users/Ciprian/OneDrive - 
                                )
 
 WAYMO18311_traj1 = Trajectory(outVisFolder="VideoWork/Output_Waymo18_traj1" + ("_seg" if USE_SEGMENTED_VIEW else ""),
-                              trajectoryPoints=np.array([[137.25, -42.7, 31.9], [162.088, -13.4408, 31.9], [179.119, 42.1118, 31.9288], [168.11, 86.89, 31.9]]),
+                              trajectoryPoints=np.array([[137.25, -42.7, 31.9], [162.088, -13.4408, 31.9], [179.119, 42.1118, 31.9288], [167.61, -77.82, 31.9]]), #[168.11, 86.89, 31.9]]),
                               trajectorySpeeds=np.array([100, 230, 300, 300]),
-                              trajectoryColors=[1.0, 1.0, 0.0])
+                              trajectoryColors=[1.0, 1.0, 0.0],
+                                 directionComingFrom=[-5.0, 0.0, 0.0])
 
 WAYMO18311_traj2 = Trajectory(outVisFolder="VideoWork/Output_Waymo18_traj1" + ("_seg" if USE_SEGMENTED_VIEW else ""),
                               trajectoryPoints=np.array([[137.25, -42.7, 31.9], [181.566, -31.13, 31.9], [246.92, 50.534, 31.9], [683.585, 78.0543, 38.8533]]),
                               trajectorySpeeds=np.array([100, 230, 300, 300]),
-                              trajectoryColors=[0.0, 1.0, 1.0])
+                              trajectoryColors=[0.0, 1.0, 1.0],
+                                 directionComingFrom=[-5.0, 0.0, 0.0])
 
 WAYMO18311_traj3 = Trajectory(outVisFolder="VideoWork/Output_Waymo18_traj1" + ("_seg" if USE_SEGMENTED_VIEW else ""),
                               trajectoryPoints=np.array([[137.25, -42.7, 31.9], [215.143, -48.9776, 31.9], [344.87, -75.93, 31.9]]),
                               trajectorySpeeds=np.array([100, 230, 300]),
-                              trajectoryColors=[0.0, 1.0, 0.0])
+                              trajectoryColors=[0.0, 1.0, 0.0],
+                                 directionComingFrom=[-5.0, 0.0, 0.0])
 
 WAYMO18311_traj4 = Trajectory(outVisFolder="VideoWork/Output_Waymo18_traj1" + ("_seg" if USE_SEGMENTED_VIEW else ""),
                               trajectoryPoints=np.array([[137.25, -42.7, 31.9], [190.143, -73.36, 31.9], [209, -99.0, 31.9]]),
                               trajectorySpeeds=np.array([100, 230, 300]),
-                              trajectoryColors=[0.0, 0.0, 1.0])
+                              trajectoryColors=[0.0, 0.0, 1.0],
+                                 directionComingFrom=[-5.0, 0.0, 0.0])
 
 
 
@@ -473,7 +488,7 @@ WAYMO18311_traj4 = Trajectory(outVisFolder="VideoWork/Output_Waymo18_traj1" + ("
 Waymo_Scene15646511 = SceneConfig(baseResourcesPath = "C:/Users/Ciprian/OneDrive - University of Bucharest, Faculty of Mathematics and Computer Science/IMAR_Work/New folder/Scene15646511",
                                    cameraParamsFile = "ScreenCamera_2020-07-08-19-20-16.json",
                                    outputSaveParams = {
-                                                        "ENABLED" : 1,
+                                                        "ENABLED" : 0,
                                                         "CROP_X" : 0,
                                                         "CROP_Y" : 428,
                                                         "CROP_WIDTH" : 1620,
@@ -483,19 +498,34 @@ Waymo_Scene15646511 = SceneConfig(baseResourcesPath = "C:/Users/Ciprian/OneDrive
                                     )
 
 WAYMO15646511_traj1 = Trajectory(outVisFolder="VideoWork/Output_Waymo15646511_traj1" + ("_seg" if USE_SEGMENTED_VIEW else ""),
-                              trajectoryPoints=np.array([[55.546, 57.3221, 31.9], [209.29, 50.392, 31.9]]),
-                              trajectorySpeeds=np.array([100, 230]),
-                              trajectoryColors=[1.0, 1.0, 0.0])
+                              trajectoryPoints=np.array([[55.546, 57.3221, 31.9], [78.546, 57.3221, 31.9], [141.67, 46, 31.9], [244.62, 43.786, 31.9]]),
+                              trajectorySpeeds=np.array([150, 150, 130, 200, 200]),
+                              trajectoryColors=[1.0, 1.0, 0.0],
+                                 directionComingFrom=[-5.0, 0.0, 0.0])
 
-WAYMO15646511_traj2 = Trajectory(outVisFolder="VideoWork/Output_Waymo15646511_traj1" + ("_seg" if USE_SEGMENTED_VIEW else ""),
-                              trajectoryPoints=np.array([[55.546, 57.3221, 31.9], [140.53, 76.46, 31.9], [140.53, 177.64, 31.9]]),
-                              trajectorySpeeds=np.array([100, 230, 300]),
-                              trajectoryColors=[0.0, 1.0, 1.0])
+WAYMO15646511_traj2 = Trajectory(outVisFolder="VideoWork/Output_Waymo15646511_traj2" + ("_seg" if USE_SEGMENTED_VIEW else ""),
+                              trajectoryPoints=np.array([[55.546, 57.3221, 31.9], [133.13, 78.88, 31.9], [150.53, 99.46, 31.9], [150.53, 187.65, 31.9]]),
+                              trajectorySpeeds=np.array([100, 160, 160, 180]),
+                              trajectoryColors=[0.0, 1.0, 1.0],
+                                 directionComingFrom=[-5.0, 0.0, 0.0])
 
-WAYMO15646511_traj3 = Trajectory(outVisFolder="VideoWork/Output_Waymo15646511_traj1" + ("_seg" if USE_SEGMENTED_VIEW else ""),
-                              trajectoryPoints=np.array([[55.546, 57.3221, 31.9], [69.379, 34.9, 31.9], [85.85, -58.182, 31.9], [150.53, -69.9, 31.9], [150.53, -166.9, 31.9]]),
-                              trajectorySpeeds=np.array([100, 230, 300, 300, 300]),
-                              trajectoryColors=[0.0, 1.0, 0.0])
+WAYMO15646511_traj3 = Trajectory(outVisFolder="VideoWork/Output_Waymo15646511_traj3" + ("_seg" if USE_SEGMENTED_VIEW else ""),
+                              trajectoryPoints=np.array([[55.546, 57.3221, 31.9], [69.379, 34.9, 31.9], [81.37, -39.182, 31.9], [154.53, -53.49, 31.9], [159.53, -91.9, 31.9]]),
+                              trajectorySpeeds=np.array([100, 150, 200, 250, 250]),
+                              trajectoryColors=[0.0, 1.0, 0.0],
+                                 directionComingFrom=[-5.0, 0.0, 0.0])
+
+WAYMO15646511_traj4 = Trajectory(outVisFolder="VideoWork/Output_Waymo15646511_traj4" + ("_seg" if USE_SEGMENTED_VIEW else ""),
+                              trajectoryPoints=np.array([[150.55, 38.53, 31.9], [170.0, 23.75, 31.9], [170.38, 8.18, 31.9], [23.9, 55.203, 31.9]]),
+                              trajectorySpeeds=np.array([220, 220, 220, 160, 160, 160]),
+                              trajectoryColors=[0.0, 1.0, 0.0],
+                                 directionComingFrom=[-5.0, 0.0, 0.0])
+
+WAYMO15646511_traj5 = Trajectory(outVisFolder="VideoWork/Output_Waymo15646511_traj5" + ("_seg" if USE_SEGMENTED_VIEW else ""),
+                              trajectoryPoints=np.array([[163.01, -35.53, 31.9], [170.0, 44.39, 31.9], [170.38, 8.18, 31.9], [23.9, 55.203, 31.9]]),
+                              trajectorySpeeds=np.array([220, 220, 220, 160, 160, 160]),
+                              trajectoryColors=[0.0, 1.0, 0.0],
+                                directionComingFrom=[0.0, -5.0, 0.0])
 
 #################################################################
 
@@ -504,13 +534,13 @@ WAYMO15646511_traj3 = Trajectory(outVisFolder="VideoWork/Output_Waymo15646511_tr
 # These are some trajectories to show with lines/curves all at once.
 # This is used only for image visualization purposes !!!
 # define them as null if you don't need them and they will not appear on the screen
-SHOW_TRAJECTORIES_FOR_VIS = [WAYMO15646511_traj1.TRAJECTORY_POINTS, WAYMO15646511_traj2.TRAJECTORY_POINTS, WAYMO15646511_traj3.TRAJECTORY_POINTS]
-#SHOW_TRAJECTORIES_FOR_VIS = [WAYMO18311_traj1.TRAJECTORY_POINTS, WAYMO18311_traj2.TRAJECTORY_POINTS, WAYMO18311_traj3.TRAJECTORY_POINTS, WAYMO18311_traj4_traj1.TRAJECTORY_POINTS]
-SHOW_TRAJECTORIES_FOR_VIS_COLORS = [WAYMO18311_traj1.TRAJECTORY_COLOR, WAYMO18311_traj2.TRAJECTORY_COLOR, WAYMO18311_traj3.TRAJECTORY_COLOR, WAYMO18311_traj4.TRAJECTORY_COLOR]
+#SHOW_TRAJECTORIES_FOR_VIS = [WAYMO15646511_traj1.TRAJECTORY_POINTS, WAYMO15646511_traj2.TRAJECTORY_POINTS, WAYMO15646511_traj3.TRAJECTORY_POINTS]
+#SHOW_TRAJECTORIES_FOR_VIS = [WAYMO18311_traj1.TRAJECTORY_POINTS, WAYMO18311_traj2.TRAJECTORY_POINTS, WAYMO18311_traj3.TRAJECTORY_POINTS, WAYMO18311_traj4.TRAJECTORY_POINTS]
+#SHOW_TRAJECTORIES_FOR_VIS_COLORS = [WAYMO18311_traj1.TRAJECTORY_COLOR, WAYMO18311_traj2.TRAJECTORY_COLOR, WAYMO18311_traj3.TRAJECTORY_COLOR, WAYMO18311_traj4.TRAJECTORY_COLOR]
+SHOW_TRAJECTORIES_FOR_VIS = None
 
-
-simData_Waymo = createSceneSimParams(sceneConfig = Waymo_Scene15646511,
-                                     trajectoryConfig = WAYMO15646511_traj1,
+simData_Waymo = createSceneSimParams(sceneConfig = Waymo_Scene15646511,                 #Waymo_Scene18311, #Waymo_Scene15646511,
+                                     trajectoryConfig = WAYMO15646511_traj1,      #WAYMO18311_traj1, #Waymo WAYMO15646511_traj1,
                                      useSegmentationView = USE_SEGMENTED_VIEW,
                                      )
 
