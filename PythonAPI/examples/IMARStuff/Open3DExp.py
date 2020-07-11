@@ -282,7 +282,12 @@ class SimulationEnv:
                                                                                                     self.startPos[2] if NEEDS_AXIS_INVERSION is True else self.startPos[1])
             self.agentInst.resetPos(startPosX_pfnnSystem, 0.0, startPosY_pfnnSystem)
             #self.agentInst.setTargetReachedThreshold(TARGET_REACHED_HACK_THRESHOLD)
-            self.distanceReachedThreshold = max(self.agentInst.getTargetReachedThreshold(), 100)
+
+            # The reaching agent threshold distance when no stop is considered
+            self.distanceReachedThreshold_NoStop = max(self.agentInst.getTargetReachedThreshold(), 100)
+
+            # The reaching agent threshold when he should stop for a time at the point
+            self.distanceReachedThreshold_WithStop = max(self.agentInst.getTargetReachedThreshold(), 5)
 
             self.YCorrection = self.startPos[1] if NEEDS_AXIS_INVERSION else self.startPos[2]
 
@@ -423,7 +428,7 @@ class SimulationEnv:
         return True
 
     # If given, recordingZPosStart will start recording from that Z forward
-    def simulatePFNNOnCloudDataTrajectory(self, trajectory, speeds, recordingZPosStart = None, recordingFrameIndex = None, save = False):
+    def simulatePFNNOnCloudDataTrajectory(self, trajectory, speeds, trajectoryStops, recordingZPosStart = None, recordingFrameIndex = None, save = False):
         global SAVE_POSE_HISTORY # TODO : put these as parameters...
         global MAX_POSES_IN_HIST
         global g_poseHistory
@@ -431,6 +436,8 @@ class SimulationEnv:
         # Transform trajectory points to data cloud coordinate reference
         self.fixedTrajectory = trajectory.copy()
         self.fixedSpeeds = speeds.copy()
+        self.fixedTrajectoryStops = trajectoryStops.copy()
+        self.nextTrajectoryIndex_PendingFrames = None # This will contain the number of frames to wait before moving to the next waypoint on trajectory. None if no wait is pending
 
         if self.trajectoryNeedsTransform == True:
             transformTrajectoryPointsFromBlenderToPointCloudVis(self.fixedTrajectory)
@@ -450,8 +457,11 @@ class SimulationEnv:
                 prevPos = None
                 for trajIdx, T in enumerate(trajectoriesToShow):
                     for pointIdx, pos3d in enumerate(T):
-                        mesh_box = o3d.geometry.TriangleMesh.create_box(width=0.5, height=0.5, depth=0.5)
+                        mesh_box = o3d.geometry.TriangleMesh.create_box(width=1.5, height=1.5, depth=1.5)
                         mesh_box.translate(pos3d)
+                        # If it is a stop box, color with differently
+                        if shouldShowMultipleTrajectories == False and self.fixedTrajectoryStops[pointIdx] > 0:
+                            mesh_box.paint_uniform_color([0.0, 0.0, 1.0])
                         self.vis.add_geometry(mesh_box)
 
                         pointsList = trajectoriesToShow[trajIdx] if shouldShowMultipleTrajectories else trajectoriesToShow[trajIdx][1:] # because the first point is a bit faked to allow the agent to move a bit
@@ -591,6 +601,13 @@ class SimulationEnv:
 
         if self.simType == SimulationType.PFNN_SIMULATION:
 
+            # First check if we are pending to start movement again after a hard stop
+            if self.nextTrajectoryIndex_PendingFrames is not None:
+                self.nextTrajectoryIndex_PendingFrames -= 1
+                if self.nextTrajectoryIndex_PendingFrames <= 0:
+                    desiredSpeed = self.fixedSpeeds[self.nextTrajectoryIndex]
+                    self.agentInst.setDesiredSpeed(desiredSpeed)
+                    self.nextTrajectoryIndex_PendingFrames = None # Make it None to reflect that we are not waiting for a pending start
 
             # Check first if we need to change our next target point index
             #-----------------------------------------------------------------
@@ -601,18 +618,22 @@ class SimulationEnv:
             # NOTE: IF NEEDS_AXIS_INVERSION is False, names containing Z below are actually Y !  Z is up in this case, Y forward!!
             # However, this is convinient since in PFNN Z is forward, Y being up..
             targetX_inPFNNSystem, targetZ_inPFNNSystem = None, None
+            targetWaitStopFrames = 0
             if self.nextTrajectoryIndex != INVALID_TRAJECTORY_INDEX:
                 targetPos = self.fixedTrajectory[self.nextTrajectoryIndex]
+                targetWaitStopFrames = self.fixedTrajectoryStops[self.nextTrajectoryIndex]
                 targetX_inPFNNSystem, targetZ_inPFNNSystem = convert2DPosFromPointCloudVisualizerToPFnn(targetPos[0],
                                                                                                         targetPos[2] if NEEDS_AXIS_INVERSION == True else targetPos[1])
 
             # If we don't have a target selected yet or we are close to our next target location, then choose the next one
-            actualDistance = None if (targetX_inPFNNSystem == None or targetZ_inPFNNSystem == None) else distance2D(agentX_pfnnSystem, agentZ_pfnnSystem, targetX_inPFNNSystem, targetZ_inPFNNSystem)
-            if actualDistance == None or actualDistance < self.distanceReachedThreshold:
+            actualDistance = 0 if (targetX_inPFNNSystem == None or targetZ_inPFNNSystem == None) else distance2D(agentX_pfnnSystem, agentZ_pfnnSystem, targetX_inPFNNSystem, targetZ_inPFNNSystem)
+
+            distTreshold =  self.distanceReachedThreshold_WithStop if targetWaitStopFrames > 0 \
+                            else self.distanceReachedThreshold_NoStop
+            if actualDistance < distTreshold:
                 self.nextTrajectoryIndex += 1
                 if self.nextTrajectoryIndex == len(self.fixedTrajectory):
                     return True
-
 
                 targetPos = self.fixedTrajectory[self.nextTrajectoryIndex]
                 # HACK - MOVE TARGET FORWARD BUT IN THE SAME MOVEMENT DIRECTION BECAUSE OF A PFNN BUG :(
@@ -624,7 +645,13 @@ class SimulationEnv:
                 DEBUG_LOG("## New target set for agent. PFNN system: {0:02f},{1:02f}. PointCloud vizualizer system pos: {2:02f},{3:02f}".format(targetX_inPFNNSystem, targetZ_inPFNNSystem, targetPos_X, targetPos_Z))
 
                 # Set agent speed too !
-                self.agentInst.setDesiredSpeed(self.fixedSpeeds[self.nextTrajectoryIndex])
+                # If the agent should be stopped, set its desired speed to 0 then when the pending frames elapsed, start it again
+                if targetWaitStopFrames > 0:
+                    self.agentInst.setDesiredSpeed(0.0)
+                    assert self.nextTrajectoryIndex_PendingFrames == None, "I was expecting this to be None before starting again a hard stop."
+                    self.nextTrajectoryIndex_PendingFrames = targetWaitStopFrames
+                else:
+                    self.agentInst.setDesiredSpeed(self.fixedSpeeds[self.nextTrajectoryIndex])
 
             #------------------------------------------------------------------------------
 
@@ -747,6 +774,7 @@ def main():
         startPos = simData["SIM_AGENT_START_POS"]
         trajectory = simData["SIM_AGENT_TRAJECTORY"]
         speeds = simData["SIM_AGENT_SPEEDS"]
+        trajectoryStops = simData["SIM_AGENT_TRAJECTORY_STOPS"]
 
         outTransformer_Waymo = ImgTransformer(cropX=simData["SAVE_PARAMS"]["CROP_X"],
                                               cropY=simData["SAVE_PARAMS"]["CROP_Y"],
@@ -759,7 +787,7 @@ def main():
 
         simEnv = SimulationEnv()
         simEnv.initEnv(simData["CameraFile"], simData, startPos, SimulationType.PFNN_SIMULATION, outTransformer)
-        simEnv.simulatePFNNOnCloudDataTrajectory(trajectory, speeds, recordingZPosStart = None, recordingFrameIndex = 0, save = simData["SAVE_PARAMS"]["ENABLED"])
+        simEnv.simulatePFNNOnCloudDataTrajectory(trajectory, speeds, trajectoryStops, recordingZPosStart = None, recordingFrameIndex = 0, save = simData["SAVE_PARAMS"]["ENABLED"])
 
 
 if __name__== "__main__":
