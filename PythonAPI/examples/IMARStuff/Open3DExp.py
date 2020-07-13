@@ -237,7 +237,9 @@ class SimulationEnv:
         # Create visualizer and set options
         # -------------------------------------
         self.vis = o3d.visualization.Visualizer()
-        self.vis.create_window(width=1628, height=1028)
+        window_width = simData["VIS_PARAMS"]["IMAGE_WIDTH"]
+        window_height = simData["VIS_PARAMS"]["IMAGE_HEIGHT"]
+        self.vis.create_window(width=window_width, height=window_height)
         self.ctr = self.vis.get_view_control()
         self.parameters = o3d.io.read_pinhole_camera_parameters(self.cameraFileParams)
         self.ctr.convert_from_pinhole_camera_parameters(self.parameters)
@@ -329,7 +331,7 @@ class SimulationEnv:
         self.agentStartSimFrame = simData['agentStartSimFrame']
         self.agentStartRenderFrame = simData['agentStartRenderFrame']
 
-        self.outVisFolder = simData["SAVE_PARAMS"]["OUT_VIS_FOLDER"]
+        self.outVisFolder = simData["VIS_PARAMS"]["OUT_VIS_FOLDER"]
 
         def rotScaleTransform(pos, R, S):
             pos = RotationMatrix.dot(pos)
@@ -531,7 +533,7 @@ class SimulationEnv:
             print("----- Sim Frame ", self.frameIndex)
 
             # Sometimes for faster execution we might disable the environment
-            if IS_ENVIRONMENT_UPDATING_ENABLED:
+            if IS_ENVIRONMENT_UPDATING_ENABLED and (self.frameIndex % IS_ENVIRONMENT_UPDATING_FRAMESKIP == 0):
                 res = self.updateEnvironment(self.frameIndex)
             else:
                 res = True
@@ -776,18 +778,19 @@ def main():
         speeds = simData["SIM_AGENT_SPEEDS"]
         trajectoryStops = simData["SIM_AGENT_TRAJECTORY_STOPS"]
 
-        outTransformer_Waymo = ImgTransformer(cropX=simData["SAVE_PARAMS"]["CROP_X"],
-                                              cropY=simData["SAVE_PARAMS"]["CROP_Y"],
-                                              cropW=simData["SAVE_PARAMS"]["CROP_WIDTH"],
-                                              cropH=simData["SAVE_PARAMS"]["CROP_HEIGHT"],
-                                              scaleFactor=simData["SAVE_PARAMS"]["SCALE_FACTOR"]) # TODO put these on params file
+        outTransformer_Waymo = ImgTransformer(cropX=simData["VIS_PARAMS"]["CROP_X"],
+                                              cropY=simData["VIS_PARAMS"]["CROP_Y"],
+                                              cropW=simData["VIS_PARAMS"]["CROP_WIDTH"],
+                                              cropH=simData["VIS_PARAMS"]["CROP_HEIGHT"],
+                                              scaleFactor=simData["VIS_PARAMS"]["SCALE_FACTOR"]) # TODO put these on params file
         ################################################################
 
         outTransformer = outTransformer_Waymo
 
         simEnv = SimulationEnv()
         simEnv.initEnv(simData["CameraFile"], simData, startPos, SimulationType.PFNN_SIMULATION, outTransformer)
-        simEnv.simulatePFNNOnCloudDataTrajectory(trajectory, speeds, trajectoryStops, recordingZPosStart = None, recordingFrameIndex = 0, save = simData["SAVE_PARAMS"]["ENABLED"])
+        simEnv.simulatePFNNOnCloudDataTrajectory(trajectory, speeds, trajectoryStops, recordingZPosStart = None,
+                                                 recordingFrameIndex = 0, save = simData["VIS_PARAMS"]["SAVE_FRAMES_ENABLED"])
 
 
 if __name__== "__main__":
