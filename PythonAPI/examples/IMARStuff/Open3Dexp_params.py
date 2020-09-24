@@ -28,7 +28,8 @@ else:
     NEEDS_AXIS_INVERSION = False
 
 SHOW_COORDINATE_AXIS = True
-BACKGROUND_COLOR = [0.27, 0.27, 0.27]
+SHOW_POINT_CLOUD_GEOMETRY = True
+BACKGROUND_COLOR = [0.27, 0.27, 0.27] #[1, 1, 1]
 INV_SCALE_FACTOR = 1.0 / SCALE_FACTOR
 POSE_SCALE_FACTOR = 0.065
 INV_POSE_SCALE_FACTOR = 1.0 / POSE_SCALE_FACTOR
@@ -434,11 +435,11 @@ def createSceneSimParams(sceneConfig : SceneConfig,
         }
 
 # Should i view scene with segmentation colors ?
-USE_SEGMENTED_VIEW = False
+USE_SEGMENTED_VIEW = True
 
 # Used for saving poses and displaying them at once for visualization
-SAVE_POSE_HISTORY = False
-MAX_POSES_IN_HIST = 150
+SAVE_POSE_HISTORY = True
+#MAX_POSES_IN_HIST = 330
 
 # If you want to see any skeleton simulation activate this
 IS_PFNN_ENABLED = True
@@ -487,7 +488,8 @@ Waymo_Scene18311_defaultVisParams = {
 Waymo_Scene18311 = SceneConfig(baseResourcesPath = "C:/Users/Ciprian/OneDrive - University of Bucharest, Faculty of Mathematics and Computer Science/IMAR_Work/New folder/Scene18311")
 
 WAYMO18311_traj1 = Trajectory(outVisFolder="VideoWork/Output_Waymo18_traj1" + ("_seg" if USE_SEGMENTED_VIEW else ""),
-                              trajectoryPoints=np.array([[214.91, 62.57, 31.9], [210.119, 49.1118, 31.92], [167.47, -31.679, 31.9], [145.25, -59.282, 31.9], [123, -60, 31.9]]),
+                              #trajectoryPoints=np.array([[214.91, 62.57, 31.9], [210.119, 49.1118, 31.92], [167.47, -31.679, 31.9], [145.25, -59.282, 31.9], [123, -60, 31.9]]), # movie
+                            trajectoryPoints=np.array([[137.25, -42.7, 31.9],  [148.9, -29.6, 31.9], [210.119, 49.1118, 31.92], [214.91, 62.57, 31.9]]),#   vis images
                               trajectorySpeeds=np.array([100, 160, 180, 140, 140, 140, 140]),
                               trajectoryColors=[1.0, 1.0, 0.0],
                                 trajectoryStops=[0.0, 15, 0, 0, 0, 0],
@@ -496,7 +498,9 @@ WAYMO18311_traj1 = Trajectory(outVisFolder="VideoWork/Output_Waymo18_traj1" + ("
                               outputVisParams=Waymo_Scene18311_defaultVisParams)
 
 WAYMO18311_traj2 = Trajectory(outVisFolder="VideoWork/Output_Waymo18_traj2" + ("_seg" if USE_SEGMENTED_VIEW else ""),
-                              trajectoryPoints=np.array([[165.26, -77, 31.9], [168.9, -29.6, 31.9], [191.5, 0.0, 31.9], [237.66, 49.957, 31.9], [277.585, 81, 31.9]]),
+                              #trajectoryPoints=np.array([[165.26, -77, 31.9], [168.9, -29.6, 31.9], [191.5, 0.0, 31.9], [237.66, 49.957, 31.9], [277.585, 81, 31.9]]), # movie
+                                trajectoryPoints=np.array([[137.25, -42.7, 31.9], [165.47, -31.679, 31.9], [191.5, 0.0, 31.9], [237.66, 49.957, 31.9], [395.6, 62.57, 31.9]]), # vis images
+
                               trajectorySpeeds=np.array([100, 140, 140, 360, 160]),
                               trajectoryColors=[0.0, 1.0, 1.0],
                                 trajectoryStops=[0.0, 0.0, 0.0, 0, 0],
@@ -523,7 +527,7 @@ WAYMO18311_traj4 = Trajectory(outVisFolder="VideoWork/Output_Waymo18_traj4" + ("
 
 # SCENE 2:  Scene15646511
 Waymo_Scene15646511_defaultVisParams = {
-                                    "CAMERA_PARAMS_FILE" : "ScreenCamera_2020-07-08-19-20-16.json", # Camera extrinsics saved
+                                    "CAMERA_PARAMS_FILE" : "ScreenCamera_2020-07-08-19-20-16_saved.json", # Camera extrinsics saved
                                     "IMAGE_WIDTH": 1628, # Resolution of the simulation
                                     "IMAGE_HEIGHT": 1028,
                                     "SAVE_FRAMES_ENABLED" : 1 if IS_ENVIRONMENT_UPDATING_ENABLED else 0, # If enabled or not
@@ -589,13 +593,13 @@ WAYMO15646511_traj4 = Trajectory(outVisFolder="VideoWork/Output_Waymo15646511_tr
 # These are some trajectories to show with lines/curves all at once.
 # This is used only for image visualization purposes !!!
 # define them as null if you don't need them and they will not appear on the screen
-#SHOW_TRAJECTORIES_FOR_VIS = [WAYMO15646511_traj1.TRAJECTORY_POINTS, WAYMO15646511_traj2.TRAJECTORY_POINTS, WAYMO15646511_traj3.TRAJECTORY_POINTS]
+SHOW_TRAJECTORIES_FOR_VIS = [WAYMO15646511_traj1.TRAJECTORY_POINTS, WAYMO15646511_traj2.TRAJECTORY_POINTS, WAYMO15646511_traj3.TRAJECTORY_POINTS]
 #SHOW_TRAJECTORIES_FOR_VIS = [WAYMO18311_traj1.TRAJECTORY_POINTS, WAYMO18311_traj2.TRAJECTORY_POINTS, WAYMO18311_traj3.TRAJECTORY_POINTS, WAYMO18311_traj4.TRAJECTORY_POINTS]
-#SHOW_TRAJECTORIES_FOR_VIS_COLORS = [WAYMO18311_traj1.TRAJECTORY_COLOR, WAYMO18311_traj2.TRAJECTORY_COLOR, WAYMO18311_traj3.TRAJECTORY_COLOR, WAYMO18311_traj4.TRAJECTORY_COLOR]
+SHOW_TRAJECTORIES_FOR_VIS_COLORS = [WAYMO18311_traj1.TRAJECTORY_COLOR, WAYMO18311_traj2.TRAJECTORY_COLOR, WAYMO18311_traj3.TRAJECTORY_COLOR, WAYMO18311_traj4.TRAJECTORY_COLOR]
 SHOW_TRAJECTORIES_FOR_VIS = None
 
-simData_Waymo = createSceneSimParams(sceneConfig = Waymo_Scene18311, #Waymo_Scene15646511,
-                                     trajectoryConfig = WAYMO18311_traj2, #Waymo WAYMO15646511_traj1,
+simData_Waymo = createSceneSimParams(sceneConfig = Waymo_Scene15646511, #Waymo_Scene18311,
+                                     trajectoryConfig = WAYMO15646511_traj3, #WAYMO18311_traj1, #WAYMO15646511_traj3, #Waymo WAYMO15646511_traj1,
                                      useSegmentationView = USE_SEGMENTED_VIEW,
                                      )
 

@@ -34,32 +34,32 @@ def savePoseHistory(outVisFolder):
         pickle.dump(g_poseHistory, fileHandle)
 
 # TODO: parametrize this + output folders above !!
+
 """
+OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj1 = os.path.join("VideoWork", "Output_Waymo18_traj1")
+OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj2 = os.path.join("VideoWork", "Output_Waymo18_traj2")
+OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj3 = os.path.join("VideoWork", "Output_Waymo18_traj3")
+OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj4 = os.path.join("VideoWork", "Output_Waymo18_traj4")
 REPLAY_POSES_HISTORY_LIST = [os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj1, "posesHist.pkl"),
                                 os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj2, "posesHist.pkl"),
                                 os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj3, "posesHist.pkl"),
                                 os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_rgb_traj4, "posesHist.pkl")]
-
-
-REPLAY_POSES_HISTORY_LIST = [os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_seg_traj1, "posesHist.pkl"),
-                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_seg_traj2, "posesHist.pkl"),
-                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_seg_traj3, "posesHist.pkl"),
-                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE18311_seg_traj4, "posesHist.pkl")]
-
-REPLAY_POSES_HISTORY_LIST = [os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj1, "posesHist.pkl"),
-                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj2, "posesHist.pkl"),
-                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj3, "posesHist.pkl")]
-                                
-
-REPLAY_POSES_HISTORY_LIST = [os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_seg_traj1, "posesHist.pkl"),
-                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_seg_traj2, "posesHist.pkl"),
-                                os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_seg_traj3, "posesHist.pkl")]    
 """
+
+OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj1 = os.path.join("VideoWork", "Output_Waymo15646511_traj1")
+OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj2 = os.path.join("VideoWork", "Output_Waymo15646511_traj2")
+OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj3 = os.path.join("VideoWork", "Output_Waymo15646511_traj3")
+REPLAY_POSES_HISTORY_LIST = [os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj1, "posesHist.pkl"),
+                             os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj2, "posesHist.pkl"),
+                             os.path.join(OUT_VIS_FOLDER_Waymo_SCENE15646511_rgb_traj3, "posesHist.pkl")]
+
+
+
 REPLAY_POSES_HISTORY_LIST = None
 
 REPLAY_MIN_FRAME_ID = 20
-REPLAY_MAX_FRAME_ID = 130
-REPLAY_FRAMESKIP = 7
+REPLAY_MAX_FRAME_ID = 260
+REPLAY_FRAMESKIP = 10
 #--------------------------------------------------
 
 
@@ -268,7 +268,8 @@ class SimulationEnv:
             self.vis.add_geometry(mesh_frame_center)
 
         # Add point cloud to the geometry
-        self.vis.add_geometry(self.pcd)
+        if SHOW_POINT_CLOUD_GEOMETRY:
+            self.vis.add_geometry(self.pcd)
 
         # Create pose geometries static (once then update them iteratively)
         # And add them to the visualizer
@@ -321,9 +322,12 @@ class SimulationEnv:
         # We want to render the agent at the time specified by agentStartRenderFrame in parallel with environment.
         # Since there is a possible delay between sim and rendering of the agent we might have to start the simulation at negative frame indices
         envStartUpdateFrame = simData["START_FRAME_INDEX_ENV"]
+
         self.frameIndex = min(envStartUpdateFrame, simData["agentStartSimFrame"])
 
-
+        # Force env show if trajectories visualization is enabled
+        if SHOW_TRAJECTORIES_FOR_VIS  is not None and SHOW_TRAJECTORY_DEBUG is True:
+            self.frameIndex = 0
 
         self.deltaTime_inMySimulation = 1.0 / self.simdata_frequency
         self.trajectoryNeedsTransform= simData["TRAJECTORY_NEEDS_TRANSFORM"]
@@ -388,7 +392,7 @@ class SimulationEnv:
     # Giving the simFrame and the time to interpolate between in the given frame to the next
     def updateEnvironment(self, simFrame):
         # The simulation has not started yet
-        if simFrame <= 0:
+        if simFrame < 0:
             return True
 
         # If we target a max number of frames stop the simulation after
@@ -444,6 +448,8 @@ class SimulationEnv:
         if self.trajectoryNeedsTransform == True:
             transformTrajectoryPointsFromBlenderToPointCloudVis(self.fixedTrajectory)
 
+        self.updateEnvironment(self.frameIndex)
+
         # Render trajectory points for debugging or visualization
         if SHOW_TRAJECTORY_DEBUG:
             # Again, these should be enabled only for image visualization debugging
@@ -453,12 +459,14 @@ class SimulationEnv:
                 trajectoriesToShow_colors = SHOW_TRAJECTORIES_FOR_VIS_COLORS
             else:
                 trajectoriesToShow = [self.fixedTrajectory] # Showing only the current trajectory path
-                trajectoriesToShow_colors = [1.0, 1.0, 0.0]
+                trajectoriesToShow_colors = [[1.0, 1.0, 0.0]]
 
-                # Trajectories waypoints
-                prevPos = None
-                for trajIdx, T in enumerate(trajectoriesToShow):
-                    for pointIdx, pos3d in enumerate(T):
+            # Trajectories waypoints
+            prevPos = None
+            for trajIdx, T in enumerate(trajectoriesToShow):
+                trajectoryColors = trajectoriesToShow_colors[trajIdx]
+                for pointIdx, pos3d in enumerate(T):
+                    if False: # Draw the box
                         mesh_box = o3d.geometry.TriangleMesh.create_box(width=1.5, height=1.5, depth=1.5)
                         mesh_box.translate(pos3d)
                         # If it is a stop box, color with differently
@@ -466,11 +474,11 @@ class SimulationEnv:
                             mesh_box.paint_uniform_color([0.0, 0.0, 1.0])
                         self.vis.add_geometry(mesh_box)
 
-                        pointsList = trajectoriesToShow[trajIdx] if shouldShowMultipleTrajectories else trajectoriesToShow[trajIdx][1:] # because the first point is a bit faked to allow the agent to move a bit
-                        line_set = LineSetCustom.LineMesh(points=pointsList, lines=None,
-                                                            colors=trajectoriesToShow_colors, radius=0.25)
-                        for cylinder in line_set.cylinder_segments:
-                            self.vis.add_geometry(cylinder)
+                    pointsList = trajectoriesToShow[trajIdx] if shouldShowMultipleTrajectories else trajectoriesToShow[trajIdx][1:] # because the first point is a bit faked to allow the agent to move a bit
+                    line_set = LineSetCustom.LineMesh(points=pointsList, lines=None,
+                                                        colors=trajectoryColors, radius=0.25)
+                    for cylinder in line_set.cylinder_segments:
+                        self.vis.add_geometry(cylinder)
 
         # Should i show the goal ?
         if SHOW_GOAL_DEBUG:
@@ -487,7 +495,7 @@ class SimulationEnv:
 
         #if outPath == None:
         #    vis.run()
-        self.updateEnvironment(self.frameIndex)
+        #self.updateEnvironment(self.frameIndex)
 
 
         # Special case to add several geometries from HISTORY list for image visualization
@@ -572,7 +580,7 @@ class SimulationEnv:
             if res == False and (IS_PFNN_ENABLED == False or STOP_PFNN_WHEN_ENVIRONMENT_UPDATE_ENDS == True):
                 isSimOver = True
 
-            if  SAVE_POSE_HISTORY and (isSimOver or self.frameIndex >= (5 + MAX_POSES_IN_HIST)):
+            if  SAVE_POSE_HISTORY and (isSimOver or self.frameIndex >= (5 + REPLAY_MAX_FRAME_ID)):
                 savePoseHistory(self.outVisFolder)
                 SAVE_POSE_HISTORY = False
                 exit(0)
