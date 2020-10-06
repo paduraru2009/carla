@@ -150,7 +150,7 @@ def run_carla_client(host, port, far):
 
 
                     Rt = car_to_world_transform.matrix
-                    Rt_inv=car_to_world_transform.inverse().matrix
+                    Rt_inv=car_to_world_transform.inverse().matrix # Rt_inv is the world to camera matrix !!
                     #R_inv=world_transform.inverse().matrix
                     cameras_dict[frame] = {}
                     cameras_dict[frame]['inverse_rotation'] = Rt_inv[:]
@@ -215,8 +215,8 @@ def run_carla_client(host, port, far):
 
                             for i in range(f.shape[0]):
                                 point = np.array([[f_rotated[i, 0]], [f_rotated[i, 1]], [f_rotated[i, 2]], [1]])
-                                transformed_2d_pos = np.dot(Rt_inv, point)
-                                pos2d = np.dot(K, transformed_2d_pos[:3])
+                                transformed_2d_pos = np.dot(Rt_inv, point)  # 3d Position in camera space
+                                pos2d = np.dot(K, transformed_2d_pos[:3])  # Conversion to camera frustum space
                                 norm_pos2d = np.array([
                                     pos2d[0] / pos2d[2],
                                     pos2d[1] / pos2d[2],
@@ -259,7 +259,7 @@ def run_carla_client(host, port, far):
 
                             for i in range(f.shape[0]):
                                 point=np.array([[f_rotated[i,0]],[f_rotated[i,1]],[f_rotated[i,2]],[1]])
-                                transformed_2d_pos=np.dot(Rt_inv, point)
+                                transformed_2d_pos=np.dot(Rt_inv, point) # See above for cars
                                 pos2d=np.dot(K, transformed_2d_pos[:3])
                                 norm_pos2d = np.array([
                                     pos2d[0] / pos2d[2],
