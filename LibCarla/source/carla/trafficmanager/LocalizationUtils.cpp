@@ -19,25 +19,17 @@ namespace LocalizationConstants {
   float DeviationCrossProduct(Actor actor, const cg::Location &vehicle_location, const cg::Location &target_location) {
 
     cg::Vector3D heading_vector = actor->GetTransform().GetForwardVector();
-    heading_vector.z = 0.0f;
-    heading_vector = heading_vector.MakeUnitVector();
     cg::Location next_vector = target_location - vehicle_location;
-    next_vector.z = 0.0f;
+    next_vector = next_vector.MakeSafeUnitVector(2 * std::numeric_limits<float>::epsilon());
 
-    if (next_vector.Length() > 2.0f * std::numeric_limits<float>::epsilon()) {
-      next_vector = next_vector.MakeUnitVector();
-      const float cross_z = heading_vector.x * next_vector.y - heading_vector.y * next_vector.x;
-      return cross_z;
-    } else {
-      return 0.0f;
-    }
+    const float cross_z = heading_vector.x * next_vector.y - heading_vector.y * next_vector.x;
+
+    return cross_z;
   }
 
   float DeviationDotProduct(Actor actor, const cg::Location &vehicle_location, const cg::Location &target_location, bool rear_offset) {
 
     cg::Vector3D heading_vector = actor->GetTransform().GetForwardVector();
-    heading_vector.z = 0.0f;
-    heading_vector = heading_vector.MakeUnitVector();
     cg::Location next_vector;
 
     if (!rear_offset) {
@@ -48,21 +40,17 @@ namespace LocalizationConstants {
       next_vector = target_location - (cg::Location(-1* vehicle_half_length * heading_vector)
                                         + vehicle_location);
     }
+    next_vector = next_vector.MakeSafeUnitVector(2 * std::numeric_limits<float>::epsilon());
 
-    next_vector.z = 0.0f;
+    const float dot_product = cg::Math::Dot(next_vector, heading_vector);
 
-    if (next_vector.Length() > 2.0f * std::numeric_limits<float>::epsilon()) {
-      next_vector = next_vector.MakeUnitVector();
-      const float dot_product = cg::Math::Dot(next_vector, heading_vector);
-      return dot_product;
-    } else {
-      return 0.0f;
-    }
+    return dot_product;
   }
 
   TrackTraffic::TrackTraffic() {}
 
-  void TrackTraffic::UpdateUnregisteredGridPosition(const ActorId actor_id, const SimpleWaypointPtr& waypoint) {
+  void TrackTraffic::UpdateUnregisteredGridPosition(const ActorId actor_id,
+                                                    const std::vector<SimpleWaypointPtr> waypoints) {
 
     // Add actor entry, if not present.
     if (actor_to_grids.find(actor_id) == actor_to_grids.end()) {
@@ -85,7 +73,7 @@ namespace LocalizationConstants {
     current_grids.clear();
 
     // Step through buffer and update grid list for actor and actor list for grids.
-    if (waypoint != nullptr) {
+    for (auto &waypoint: waypoints) {
 
       GeoGridId ggid = waypoint->GetGeodesicGridId();
       current_grids.insert(ggid);

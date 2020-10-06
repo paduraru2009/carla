@@ -7,11 +7,10 @@
 #pragma once
 
 #include <vector>
-#include <memory>
 
 #include "carla/Exception.h"
 #include "carla/client/Actor.h"
-#include "carla/Version.h"
+#include "carla/client/detail/ActorVariant.h"
 #include "carla/rpc/Server.h"
 #include "carla/trafficmanager/TrafficManagerBase.h"
 
@@ -45,6 +44,7 @@ public:
         server = new ::rpc::server(RPCPort);
 
       } catch(std::exception) {
+        using namespace std::chrono_literals;
         /// Update port number and try again.
         std::this_thread::sleep_for(500ms);
       }
@@ -153,6 +153,11 @@ public:
       /// Method to set hybrid physics mode.
       server->bind("set_hybrid_physics_mode", [=](const bool mode_switch) {
         tm->SetHybridPhysicsMode(mode_switch);
+      });
+
+      /// Method to set hybrid physics radius.
+      server->bind("set_hybrid_physics_radius", [=](const float radius) {
+        tm->SetHybridPhysicsRadius(radius);
       });
 
       /// Method to set synchronous mode.

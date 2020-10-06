@@ -21,6 +21,7 @@
 #include <carla/geom/GeoLocation.h>
 #include <carla/rpc/Actor.h>
 #include <carla/rpc/ActorDescription.h>
+#include <carla/rpc/OpendriveGenerationParameters.h>
 #include <carla/streaming/Server.h>
 #include <compiler/enable-ue4-macros.h>
 
@@ -66,12 +67,9 @@ public:
   /// start a new episode.
   ///
   /// If @a MapString is empty, it fails.
-  UFUNCTION(BlueprintCallable)
   bool LoadNewOpendriveEpisode(
       const FString &OpenDriveString,
-      float Resolution,
-      float WallHeight,
-      float AdditionalWidth);
+      const carla::rpc::OpendriveGenerationParameters &Params);
 
   // ===========================================================================
   // -- Episode settings -------------------------------------------------------

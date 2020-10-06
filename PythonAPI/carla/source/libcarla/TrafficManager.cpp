@@ -17,6 +17,7 @@ void export_trafficmanager() {
     using namespace boost::python;
 
     class_<carla::traffic_manager::TrafficManager>("TrafficManager", no_init)
+      .def("get_port", &carla::traffic_manager::TrafficManager::Port)
       .def("vehicle_percentage_speed_difference", &carla::traffic_manager::TrafficManager::SetPercentageSpeedDifference)
       .def("global_percentage_speed_difference", &carla::traffic_manager::TrafficManager::SetGlobalPercentageSpeedDifference)
       .def("collision_detection", &carla::traffic_manager::TrafficManager::SetCollisionDetection)
@@ -31,5 +32,6 @@ void export_trafficmanager() {
       .def("set_global_distance_to_leading_vehicle", &carla::traffic_manager::TrafficManager::SetGlobalDistanceToLeadingVehicle)
       .def("set_percentage_keep_right_rule", &carla::traffic_manager::TrafficManager::SetKeepRightPercentage)
       .def("set_synchronous_mode", &carla::traffic_manager::TrafficManager::SetSynchronousMode)
-      .def("set_hybrid_physics_mode", &carla::traffic_manager::TrafficManager::SetHybridPhysicsMode);
+      .def("set_hybrid_physics_mode", &carla::traffic_manager::TrafficManager::SetHybridPhysicsMode)
+      .def("set_hybrid_physics_radius", &carla::traffic_manager::TrafficManager::SetHybridPhysicsRadius);
 }

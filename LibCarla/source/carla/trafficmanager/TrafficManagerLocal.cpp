@@ -6,10 +6,6 @@
 
 #include "carla/trafficmanager/TrafficManagerLocal.h"
 
-#include "carla/client/TrafficLight.h"
-#include "carla/client/ActorList.h"
-#include "carla/client/DebugHelper.h"
-
 namespace carla {
 namespace traffic_manager {
 
@@ -217,6 +213,10 @@ void TrafficManagerLocal::SetHybridPhysicsMode(const bool mode_switch) {
   parameters.SetHybridPhysicsMode(mode_switch);
 }
 
+void TrafficManagerLocal::SetHybridPhysicsRadius(const float radius) {
+  parameters.SetHybridPhysicsRadius(radius);
+}
+
 bool TrafficManagerLocal::CheckAllFrozen(TLGroup tl_to_freeze) {
   for (auto& elem : tl_to_freeze) {
     if (!elem->IsFrozen() || elem->GetState() != TLS::Red) {
@@ -285,7 +285,9 @@ void TrafficManagerLocal::SetSynchronousModeTimeOutInMiliSecond(double time) {
 }
 
 bool TrafficManagerLocal::SynchronousTick() {
-  return control_stage->RunStep();
+  localization_stage->RunStep();
+  control_stage->RunStep();
+  return true;
 }
 
 carla::client::detail::EpisodeProxy& TrafficManagerLocal::GetEpisodeProxy() {
