@@ -13,7 +13,7 @@
 #include "carla/trafficmanager/TrafficManagerLocal.h"
 #include "carla/trafficmanager/TrafficManagerRemote.h"
 
-#define DEBUG_PRINT_TM  0
+//#define DEBUG_PRINT_TM  0
 #define IP_DATA_BUFFER_SIZE     80
 
 namespace carla {

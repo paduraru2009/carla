@@ -32,7 +32,7 @@ while true; do
       BUILD_FOR_PYTHON3=true;
       shift ;;
     --py2 )
-      BUILD_FOR_PYTHON2=true;
+      BUILD_FOR_PYTHON2=false;
       shift ;;
     --py3 )
       BUILD_FOR_PYTHON3=true;

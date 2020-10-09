@@ -50,10 +50,10 @@ namespace rpc {
           speed(in_speed),
           jump(in_jump),
           useForcedTarget(false),
-          targetPos({1.0f, 0.0f, 0.0f}), 
           usePFNN(false)
           //poses(in_poses)
           {
+            targetPos = geom::Vector3D(1.0f, 0.0f, 0.0f);
             poses.clear();
           }
 

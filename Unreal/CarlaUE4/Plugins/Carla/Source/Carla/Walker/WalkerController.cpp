@@ -140,8 +140,7 @@ void AWalkerController::ControlTickVisitor::operator()(FWalkerControl &WalkerCon
       Character->AddMovementInput(useControlDirection ? WalkerControl.Direction : direction, targetSpeedPercent);
 
       FVector newPos = Character->GetActorLocation();
-      newPos = newPos;
-
+      
       // TODO: check overshoot
 
       // Render skeleton target if requested
