@@ -6,14 +6,16 @@
 
 #pragma once
 
-#include "carla/client/Actor.h"
-#include <rpc/client.h>
+#include "carla/trafficmanager/Constants.h"
+#include "carla/rpc/Actor.h"
 
-#define TM_TIMEOUT        2000 // In ms
-#define TM_DEFAULT_PORT   8000 // TM_SERVER_PORT
+#include <rpc/client.h>
 
 namespace carla {
 namespace traffic_manager {
+
+using constants::Networking::TM_TIMEOUT;
+using constants::Networking::TM_DEFAULT_PORT;
 
 /// Provides communication with the rpc of TrafficManagerServer.
 class TrafficManagerClient {
@@ -189,6 +191,18 @@ public:
   void SetHybridPhysicsRadius(const float radius) {
     DEBUG_ASSERT(_client != nullptr);
     _client->call("set_hybrid_physics_radius", radius);
+  }
+
+  /// Method to set randomization seed.
+  void SetRandomDeviceSeed(const uint64_t seed) {
+    DEBUG_ASSERT(_client != nullptr);
+    _client->call("set_random_device_seed", seed);
+  }
+
+  /// Method to set Open Street Map mode.
+  void SetOSMMode(const bool mode_switch) {
+    DEBUG_ASSERT(_client != nullptr);
+    _client->call("set_osm_mode", mode_switch);
   }
 
 private:

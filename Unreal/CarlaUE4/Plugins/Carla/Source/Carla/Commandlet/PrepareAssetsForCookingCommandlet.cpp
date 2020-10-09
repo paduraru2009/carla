@@ -12,6 +12,31 @@
 #include "HAL/PlatformFilemanager.h"
 #include "UObject/ConstructorHelpers.h"
 
+static bool ValidateStaticMesh(UStaticMesh *Mesh)
+{
+  const FString AssetName = Mesh->GetName();
+
+  if (AssetName.Contains(TEXT("light"), ESearchCase::IgnoreCase) ||
+      AssetName.Contains(TEXT("sign"), ESearchCase::IgnoreCase))
+  {
+    return false;
+  }
+
+  for (int i = 0; i < Mesh->StaticMaterials.Num(); i++)
+  {
+    UMaterialInterface *Material = Mesh->GetMaterial(i);
+    const FString MaterialName = Material->GetName();
+
+    if (MaterialName.Contains(TEXT("light"), ESearchCase::IgnoreCase) ||
+        MaterialName.Contains(TEXT("sign"), ESearchCase::IgnoreCase))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 UPrepareAssetsForCookingCommandlet::UPrepareAssetsForCookingCommandlet()
 {
   // Set necessary flags to run commandlet
@@ -24,11 +49,11 @@ UPrepareAssetsForCookingCommandlet::UPrepareAssetsForCookingCommandlet()
   // Get Carla Default materials, these will be used for maps that need to use
   // Carla materials
   static ConstructorHelpers::FObjectFinder<UMaterial> MarkingNode(TEXT(
-      "Material'/Game/Carla/Static/GenericMaterials/LaneMarking/M_MarkingLane_Y.M_MarkingLane_Y'"));
+      "Material'/Game/Carla/Static/GenericMaterials/LaneMarking/M_MarkingLane_W.M_MarkingLane_W'"));
   static ConstructorHelpers::FObjectFinder<UMaterial> RoadNode(TEXT(
       "Material'/Game/Carla/Static/GenericMaterials/Masters/LowComplexity/M_Road1.M_Road1'"));
   static ConstructorHelpers::FObjectFinder<UMaterial> RoadNodeAux(TEXT(
-      "Material'/Game/Carla/Static/GenericMaterials/LaneMarking/M_MarkingLane_W.M_MarkingLane_W'"));
+      "Material'/Game/Carla/Static/GenericMaterials/LaneMarking/M_MarkingLane_Y.M_MarkingLane_Y'"));
   static ConstructorHelpers::FObjectFinder<UMaterial> TerrainNodeMaterial(TEXT(
       "Material'/Game/Carla/Static/GenericMaterials/Grass/M_Grass01.M_Grass01'"));
   static ConstructorHelpers::FObjectFinder<UMaterial> SidewalkNode(TEXT(
@@ -63,7 +88,7 @@ FPackageParams UPrepareAssetsForCookingCommandlet::ParseParams(const FString &In
 void UPrepareAssetsForCookingCommandlet::LoadWorld(FAssetData &AssetData)
 {
   // BaseMap path inside Carla
-  FString BaseMap = TEXT("/Game/Carla/Maps/BaseMap");
+  const FString BaseMap = TEXT("/Game/Carla/Maps/BaseMap");
 
   // Load Map folder using object library
   MapObjectLibrary = UObjectLibrary::CreateLibrary(UWorld::StaticClass(), false, GIsEditor);
@@ -105,7 +130,7 @@ TArray<AStaticMeshActor *> UPrepareAssetsForCookingCommandlet::SpawnMeshesToWorl
   {
     // Spawn Static Mesh
     MeshAsset = Cast<UStaticMesh>(MapAsset.GetAsset());
-    if (MeshAsset)
+    if (MeshAsset && ValidateStaticMesh(MeshAsset))
     {
       MeshActor = World->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), zeroTransform);
       UStaticMeshComponent *MeshComponent = MeshActor->GetStaticMeshComponent();
@@ -116,7 +141,8 @@ TArray<AStaticMeshActor *> UPrepareAssetsForCookingCommandlet::SpawnMeshesToWorl
       MapAsset.AssetName.ToString(AssetName);
       // Remove the prefix with the FBX name
       int32 FindIndex = AssetName.Find("_", ESearchCase::IgnoreCase, ESearchDir::FromStart, 0);
-      if(FindIndex >= 0) {
+      if (FindIndex >= 0)
+      {
         AssetName.RemoveAt(0, FindIndex + 1, true);
       }
       MeshActor->SetActorLabel(AssetName, true);
@@ -128,10 +154,6 @@ TArray<AStaticMeshActor *> UPrepareAssetsForCookingCommandlet::SpawnMeshesToWorl
         BodySetup->CollisionTraceFlag = CTF_UseComplexAsSimple;
         MeshAsset->MarkPackageDirty();
       }
-
-      // rotate all meshes 180 degrees to fit with OpenDRIVE info
-      // (seems that new version of RoadRunner is doing this)
-      // MeshActor->SetActorRotation(FRotator(0.0f, 180.0f, 0.0f));
 
       SpawnedMeshes.Add(MeshActor);
 
@@ -190,34 +212,35 @@ bool UPrepareAssetsForCookingCommandlet::SaveWorld(
 {
   // Create Package to save
   UPackage *Package = AssetData.GetPackage();
-  Package->SetFolderName(*DestPath);
+  Package->SetFolderName(*WorldName);
   Package->FullyLoad();
   Package->MarkPackageDirty();
   FAssetRegistryModule::AssetCreated(World);
 
   // Renaming map
   World->Rename(*WorldName, World->GetOuter());
-  FString PackagePath = DestPath + "/" + WorldName;
+  const FString PackagePath = DestPath + "/" + WorldName;
   FAssetRegistryModule::AssetRenamed(World, *PackagePath);
   World->MarkPackageDirty();
   World->GetOuter()->MarkPackageDirty();
 
   // Check if OpenDrive file exists
-  FString PathXODR = FPaths::ProjectContentDir() + PackageName + TEXT("/Maps/") + WorldName + TEXT(
-      "/OpenDrive/") + WorldName + TEXT(".xodr");
+  const FString PathXODR = FPaths::ProjectContentDir() + PackageName + TEXT("/Maps/") +
+      WorldName + TEXT("/OpenDrive/") + WorldName + TEXT(".xodr");
 
   bool bPackageSaved = false;
   if (FPaths::FileExists(PathXODR))
   {
     // We need to spawn OpenDrive assets before saving the map
-    AOpenDriveActor *OpenWorldActor =
-        CastChecked<AOpenDriveActor>(World->SpawnActor(AOpenDriveActor::StaticClass(),
-        new FVector(), NULL));
+    AOpenDriveActor *OpenWorldActor = CastChecked<AOpenDriveActor>(
+        World->SpawnActor(AOpenDriveActor::StaticClass(),
+        new FVector(),
+        NULL));
 
     OpenWorldActor->BuildRoutes(WorldName);
     OpenWorldActor->AddSpawners();
 
-    SavePackage(PackagePath, Package);
+    bPackageSaved = SavePackage(PackagePath, Package);
 
     // We need to destroy OpenDrive assets once saved the map
     OpenWorldActor->RemoveRoutes();
@@ -226,7 +249,7 @@ bool UPrepareAssetsForCookingCommandlet::SaveWorld(
   }
   else
   {
-    SavePackage(PackagePath, Package);
+    bPackageSaved = SavePackage(PackagePath, Package);
   }
 
   return bPackageSaved;
@@ -250,7 +273,7 @@ FString UPrepareAssetsForCookingCommandlet::GetFirstPackagePath(const FString &P
 
 FAssetsPaths UPrepareAssetsForCookingCommandlet::GetAssetsPathFromPackage(const FString &PackageName) const
 {
-  FString PackageJsonFilePath = GetFirstPackagePath(PackageName);
+  const FString PackageJsonFilePath = GetFirstPackagePath(PackageName);
 
   FAssetsPaths AssetsPaths;
 
@@ -284,7 +307,7 @@ FAssetsPaths UPrepareAssetsForCookingCommandlet::GetAssetsPathFromPackage(const 
       {
         TSharedPtr<FJsonObject> PropJsonObject = PropJsonValue->AsObject();
 
-        FString PropAssetPath = PropJsonObject->GetStringField(TEXT("path"));
+        const FString PropAssetPath = PropJsonObject->GetStringField(TEXT("path"));
 
         AssetsPaths.PropsPaths.Add(std::move(PropAssetPath));
       }
@@ -307,7 +330,7 @@ bool SaveStringTextToFile(
   if (PlatformFile.CreateDirectoryTree(*SaveDirectory))
   {
     // Get absolute file path
-    FString AbsoluteFilePath = SaveDirectory + "/" + FileName;
+    const FString AbsoluteFilePath = SaveDirectory + "/" + FileName;
 
     // Allow overwriting or file doesn't already exist
     if (bAllowOverWriting || !PlatformFile.FileExists(*AbsoluteFilePath))
@@ -320,7 +343,8 @@ bool SaveStringTextToFile(
 
 bool UPrepareAssetsForCookingCommandlet::SavePackage(const FString &PackagePath, UPackage *Package) const
 {
-  FString PackageFileName = FPackageName::LongPackageNameToFilename(PackagePath,
+  const FString PackageFileName = FPackageName::LongPackageNameToFilename(
+      PackagePath,
       FPackageName::GetMapPackageExtension());
 
   if (FPaths::FileExists(*PackageFileName))
@@ -329,8 +353,16 @@ bool UPrepareAssetsForCookingCommandlet::SavePackage(const FString &PackagePath,
     return false;
   }
 
-  return UPackage::SavePackage(Package, World, EObjectFlags::RF_Public | EObjectFlags::RF_Standalone,
-      *PackageFileName, GError, nullptr, true, true, SAVE_NoError);
+  return UPackage::SavePackage(
+      Package,
+      World,
+      EObjectFlags::RF_Public | EObjectFlags::RF_Standalone,
+      *PackageFileName,
+      GError,
+      nullptr,
+      true,
+      true,
+      SAVE_NoError);
 }
 
 void UPrepareAssetsForCookingCommandlet::GenerateMapPathsFile(
@@ -343,20 +375,17 @@ void UPrepareAssetsForCookingCommandlet::GenerateMapPathsFile(
     MapPathData.Append(Map.Path + TEXT("/") + Map.Name + TEXT("+"));
   }
 
-  if (PropsMapPath.IsEmpty())
+  if (!PropsMapPath.IsEmpty())
   {
-    MapPathData.Append(PropsMapPath);
+    MapPathData.Append(PropsMapPath + TEXT("/PropsMap"));
   }
   else
   {
-    if (!MapPathData.IsEmpty())
-    {
-      MapPathData.RemoveFromEnd(TEXT("+"));
-    }
+    MapPathData.RemoveFromEnd(TEXT("+"));
   }
 
-  FString SaveDirectory = FPaths::ProjectContentDir();
-  FString FileName = FString("MapPaths.txt");
+  const FString SaveDirectory = FPaths::ProjectContentDir();
+  const FString FileName = FString("MapPaths.txt");
   SaveStringTextToFile(SaveDirectory, FileName, MapPathData, true);
 }
 
@@ -381,15 +410,15 @@ void UPrepareAssetsForCookingCommandlet::PrepareMapsForCooking(
 
   for (const auto &Map : MapsPaths)
   {
-    FString MapPath = TEXT("/") + Map.Name;
+    const FString MapPath = TEXT("/") + Map.Name;
 
-    FString DefaultPath   = TEXT("/Game/") + PackageName + TEXT("/Maps/") + Map.Name;
-    FString RoadsPath     = BasePath + SSTags::ROAD       + MapPath;
-    FString RoadLinesPath = BasePath + SSTags::ROADLINES  + MapPath;
-    FString TerrainPath   = BasePath + SSTags::TERRAIN    + MapPath;
-    FString SidewalkPath  = BasePath + SSTags::SIDEWALK   + MapPath;
+    const FString DefaultPath   = TEXT("/Game/") + PackageName + TEXT("/Maps/") + Map.Name;
+    const FString RoadsPath     = BasePath + SSTags::ROAD      + MapPath;
+    const FString RoadLinesPath = BasePath + SSTags::ROADLINES + MapPath;
+    const FString TerrainPath   = BasePath + SSTags::TERRAIN   + MapPath;
+    const FString SidewalkPath  = BasePath + SSTags::SIDEWALK  + MapPath;
 
-    // Spawn assets located in semantic segmentation fodlers
+    // Spawn assets located in semantic segmentation folders
     TArray<FString> DataPath = {DefaultPath, RoadsPath, RoadLinesPath, TerrainPath, SidewalkPath};
 
     TArray<AStaticMeshActor *> SpawnedActors = SpawnMeshesToWorld(DataPath, Map.bUseCarlaMapMaterials);
@@ -409,6 +438,7 @@ void UPrepareAssetsForCookingCommandlet::PreparePropsForCooking(
 {
   // Load World
   FAssetData AssetData;
+  // Loads the BaseMap
   LoadWorld(AssetData);
   World = CastChecked<UWorld>(AssetData.GetAsset());
 
@@ -418,13 +448,14 @@ void UPrepareAssetsForCookingCommandlet::PreparePropsForCooking(
 
   for (auto &PropPath : PropPathDirs)
   {
-    PropPath.Split(TEXT("/"), &PropPath, nullptr, ESearchCase::Type::IgnoreCase, ESearchDir::Type::FromEnd);
+    PropPath.Split(TEXT("/"), &PropPath, nullptr,
+        ESearchCase::Type::IgnoreCase, ESearchDir::Type::FromEnd);
   }
 
   // Add props in a single Base Map
   TArray<AStaticMeshActor *> SpawnedActors = SpawnMeshesToWorld(PropPathDirs, false);
 
-  FString MapName("PropsMap");
+  const FString MapName("PropsMap");
   SaveWorld(AssetData, PackageName, MapDestPath, MapName);
 
   DestroySpawnedActorsInWorld(SpawnedActors);
@@ -448,9 +479,8 @@ int32 UPrepareAssetsForCookingCommandlet::Main(const FString &Params)
 
     if (AssetsPaths.PropsPaths.Num() > 0)
     {
-      FString MapName("PropsMap");
-      PropsMapPath = TEXT("/Game/") + PackageParams.Name + TEXT("/Maps/") + MapName;
-      PreparePropsForCooking(PackageParams.Name, AssetsPaths.PropsPaths, MapName);
+      PropsMapPath = TEXT("/Game/") + PackageParams.Name + TEXT("/Maps/PropsMap");
+      PreparePropsForCooking(PackageParams.Name, AssetsPaths.PropsPaths, PropsMapPath);
     }
 
     // Save Map Path File for further use
@@ -460,9 +490,9 @@ int32 UPrepareAssetsForCookingCommandlet::Main(const FString &Params)
     GeneratePackagePathFile(PackageParams.Name);
   }
 
-  #if WITH_EDITOR
+#if WITH_EDITOR
   UEditorLoadingAndSavingUtils::SaveDirtyPackages(true, true);
-  #endif
+#endif
 
   return 0;
 }

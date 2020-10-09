@@ -2,13 +2,16 @@
 
 After discussing about the world and its actors, it is time to put everything into place and understand the map and how do the actors navigate it.  
 
-* [__The map__](#the-map)  
-	* Map changing  
-	* Lanes  
-	* Junctions  
-	* Waypoints  
-* [__Navigation in CARLA__](#navigation-in-carla)  
-* [__CARLA maps__](#carla-maps)  
+*   [__The map__](#the-map)  
+	*   [Changing the map](#changing-the-map)  
+	*   [Landmarks](#landmarks)  
+	*   [Lanes](#lanes)  
+	*   [Junctions](#junctions)  
+	*   [Waypoints](#waypoints)  
+*   [__Navigation in CARLA__](#navigation-in-carla)  
+	*   [Navigating through waypoints](#navigating-through-waypoints)  
+	*   [Generating a map navigation](#generating-a-map-navigation)  
+*   [__CARLA maps__](#carla-maps)  
 
 ---
 ## The map
@@ -31,6 +34,21 @@ The client can get a list of available maps. Each map has a `name` attribute tha
 ```py
 print(client.get_available_maps())
 ```
+
+### Landmarks
+
+The traffic signs defined in the OpenDRIVE file are translated into CARLA as landmark objects that can be queried from the API. In order to facilitate their manipulation, there have been several additions to it.  
+
+*   __[carla.Landmark](https://carla.readthedocs.io/en/latest/python_api/#carla.Landmark)__ objects represent the OpenDRIVE signals. The attributes and methods describe the landmark, and where it is effective.  
+	*	[__carla.LandmarkOrientation__](https://carla.readthedocs.io/en/latest/python_api/#carla.LandmarkOrientation) states the orientation of the landmark with regards of the road's geometry definition.  
+	*	[__carla.LandmarkType__](https://carla.readthedocs.io/en/latest/python_api/#carla.LandmarkType) contains some common landmark types, to ease translation to OpenDRIVE types.  
+*   A __[carla.Waypoint](https://carla.readthedocs.io/en/latest/python_api/#carla.Waypoint)__ can get landmarks located a certain distance ahead of it. The type of landmark can be specified. 
+*   The __[carla.Map](https://carla.readthedocs.io/en/latest/python_api/#carla.Map)__ retrieves sets of landmarks. It can return all the landmarks in the map, or those having an ID, type or group in common.  
+*   The __[carla.World](https://carla.readthedocs.io/en/latest/python_api/#carla.World)__ acts as intermediary between landmarks, and the *carla.TrafficSign* and *carla.TrafficLight* that embody them in the simulation.  
+
+```py
+my_waypoint.get_landmarks(200.0,True)
+``` 
 
 ### Lanes
 
@@ -68,7 +86,7 @@ waypoints_junc = my_junction.get_waypoints()
 
 ### Waypoints
 
-A [__carla.Waypoint__](python_api.md#carla.Waypoint) is a 3D-directed point. These are prepared to mediate between the world and the openDRIVE definition of the road.  
+A [__carla.Waypoint__](python_api.md#carla.Waypoint) is a 3D-directed point. These are prepared to mediate between the world and the openDRIVE definition of the road. Everything related with waypoints happens on the client-side, so there no communication with the server is needed.  
 
 Each waypoint contains a [carla.Transform](python_api.md#carla.Transform). This states its location on the map and the orientation of the lane containing it. The variables `road_id`,`section_id`,`lane_id` and `s` translate this transform to the OpenDRIVE road. These combined, create the `id` of the waypoint.  
 
@@ -86,6 +104,11 @@ right_lm_color = waypoint.right_lane_marking.color
 
 ---
 ## Navigation in CARLA
+
+Navigation in CARLA is managed via the waypoint API. This consists of a summary of methods in [carla.Waypoint](python_api.md#carla.Waypoint) and [carla.Map](python_api.md#carla.Map).  
+
+All the queries happen on the client-side. The client only communicates with the server when retrieving the map object that will be used for the queries. There is no need to retrieve the map (`world.get_map()`) more than once.  
+
 
 ### Navigating through waypoints
 
@@ -107,7 +130,9 @@ while True:
 
 ### Generating a map navigation
 
-The instance of the map is provided by the world. It will be useful to create routes and make vehicles roam around the city and reach goal destinations.
+The instance of the map is provided by the world. It will be useful to create routes and make vehicles roam around the city and reach goal destinations.  
+
+The following method asks the server for the XODR map file, and parses it to a [carla.Map](python_api.md#carla.Map) object. It only needs to be calle once. Maps can be quite heavy, and successive calls are unnecessary and expensive.  
 
 ```py
 map = world.get_map()
@@ -186,6 +211,9 @@ So far there are seven different maps available. Each one has unique features an
 <tr>
 <td><b>Town07</b></td>
 <td>A rural environment with narrow roads, barely non traffic lights and barns.</td>
+<tr>
+<td><b>Town10</b></td>
+<td>A city environment with with different environments such as an avenue or a promenade, and more realistic textures.</td>
 </tbody>
 </table>
 <br>
@@ -194,39 +222,45 @@ So far there are seven different maps available. Each one has unique features an
 <div class="townslider-container">
   <!-- Town slide images -->
   <div class="townslide fade">
-  <img src="../img/Town01.png">
+  <img src="../img/Town01.jpg">
     <div class="text">Town01</div>
   </div>
 
   <div class="townslide fade">
-  <img src="../img/Town02.png">
+  <img src="../img/Town02.jpg">
     <div class="text">Town02</div>
   </div>
 
   <div class="townslide fade">
-    <img src="../img/Town03.png">
+    <img src="../img/Town03.jpg">
     <div class="text">Town03</div>
   </div>
 
   <div class="townslide fade">
-    <img src="../img/Town04.png">
+    <img src="../img/Town04.jpg">
     <div class="text">Town04</div>
   </div>
 
   <div class="townslide fade">
-    <img src="../img/Town05.png">
+    <img src="../img/Town05.jpg">
     <div class="text">Town05</div>
   </div>
 
   <div class="townslide fade">
-    <img src="../img/Town06.png">
+    <img src="../img/Town06.jpg">
     <div class="text">Town06</div>
   </div>
 
   <div class="townslide fade">
-    <img src="../img/Town07.png">
+    <img src="../img/Town07.jpg">
     <div class="text">Town07</div>
   </div>
+
+  <div class="townslide fade">
+    <img src="../img/Town10.jpg">
+    <div class="text">Town10</div>
+  </div>
+
 
   <!-- Next and previous buttons -->
   <a class="prev" onclick="plusSlides(-1)">&#10094;</a>
@@ -242,6 +276,7 @@ So far there are seven different maps available. Each one has unique features an
   <span class="dot" onclick="currentSlide(5)"></span>
   <span class="dot" onclick="currentSlide(6)"></span>
   <span class="dot" onclick="currentSlide(7)"></span>
+  <span class="dot" onclick="currentSlide(8)"></span>
 </div> 
 
 <script>

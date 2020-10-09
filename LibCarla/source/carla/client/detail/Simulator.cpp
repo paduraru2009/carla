@@ -74,6 +74,7 @@ namespace detail {
       const bool enable_garbage_collection)
     : LIBCARLA_INITIALIZE_LIFETIME_PROFILER("SimulatorClient("s + host + ":" + std::to_string(port) + ")"),
       _client(host, port, worker_threads),
+      _light_manager(new LightManager()),
       _gc_policy(enable_garbage_collection ?
         GarbageCollectionPolicy::Enabled : GarbageCollectionPolicy::Disabled) {}
 
@@ -119,6 +120,7 @@ namespace detail {
       if (!GetEpisodeSettings().synchronous_mode) {
         WaitForTick(_client.GetTimeout());
       }
+      _light_manager->SetEpisode(EpisodeProxy{shared_from_this()});
     }
     return EpisodeProxy{shared_from_this()};
   }
@@ -157,6 +159,10 @@ namespace detail {
   SharedPtr<BlueprintLibrary> Simulator::GetBlueprintLibrary() {
     auto defs = _client.GetActorDefinitions();
     return MakeShared<BlueprintLibrary>(std::move(defs));
+  }
+
+  rpc::VehicleLightStateList Simulator::GetVehiclesLightStates() {
+    return _client.GetVehiclesLightStates();
   }
 
   SharedPtr<Actor> Simulator::GetSpectator() {
@@ -283,6 +289,10 @@ namespace detail {
 
   void Simulator::UnSubscribeFromSensor(const Sensor &sensor) {
     _client.UnSubscribeFromStream(sensor.GetActorDescription().GetStreamToken());
+  }
+
+  void Simulator::FreezeAllTrafficLights(bool frozen) {
+    _client.FreezeAllTrafficLights(frozen);
   }
 
 } // namespace detail

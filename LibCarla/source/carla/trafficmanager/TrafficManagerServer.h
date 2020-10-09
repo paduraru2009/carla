@@ -12,12 +12,15 @@
 #include "carla/client/Actor.h"
 #include "carla/client/detail/ActorVariant.h"
 #include "carla/rpc/Server.h"
+#include "carla/trafficmanager/Constants.h"
 #include "carla/trafficmanager/TrafficManagerBase.h"
 
 namespace carla {
 namespace traffic_manager {
 
 using ActorPtr = carla::SharedPtr<carla::client::Actor>;
+
+using namespace constants::Networking;
 
 class TrafficManagerServer {
 public:
@@ -160,6 +163,11 @@ public:
         tm->SetHybridPhysicsRadius(radius);
       });
 
+      /// Method to set hybrid physics radius.
+      server->bind("set_osm_mode", [=](const bool mode_switch) {
+        tm->SetHybridPhysicsRadius(mode_switch);
+      });
+
       /// Method to set synchronous mode.
       server->bind("set_synchronous_mode", [=](const bool mode) {
         tm->SetSynchronousMode(mode);
@@ -168,6 +176,11 @@ public:
       /// Method to set tick timeout for synchronous execution.
       server->bind("set_synchronous_mode_timeout_in_milisecond", [=](const double time) {
         tm->SetSynchronousModeTimeOutInMiliSecond(time);
+      });
+
+      /// Method to set randomization seed.
+      server->bind("set_random_device_seed", [=](const uint64_t seed) {
+        tm->SetRandomDeviceSeed(seed);
       });
 
       /// Method to provide synchronous tick.

@@ -12,8 +12,10 @@
 #include "Carla/Recorder/CarlaRecorder.h"
 #include "Carla/Game/TaggerDelegate.h"
 #include "Carla/OpenDrive/OpenDrive.h"
+#include "Carla/Sensor/SceneCaptureSensor.h"
 #include "Carla/Settings/CarlaSettingsDelegate.h"
 #include "Carla/Weather/Weather.h"
+#include "Carla/Traffic/TrafficLightManager.h"
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
@@ -44,8 +46,14 @@ public:
     return Map;
   }
 
-  UFUNCTION(Exec, CallInEditor, meta=(DevelopmentOnly))
+  UFUNCTION(Exec, Category = "CARLA Game Mode")
   void DebugShowSignals(bool enable);
+
+  UFUNCTION(BlueprintCallable, Category = "CARLA Game Mode")
+  ATrafficLightManager* GetTrafficLightManager();
+
+  UFUNCTION(Category = "Carla Game Mode", BlueprintCallable, CallInEditor, Exec)
+  TArray<FBoundingBox> GetAllBBsOfLevel(uint8 TagQueried = 0);
 
 protected:
 
@@ -78,7 +86,7 @@ private:
   UCarlaEpisode *Episode = nullptr;
 
   UPROPERTY()
-  ACarlaRecorder *Recorder = nullptr;
+  ACarlaRecorder *Recorder = nullptr; 
 
   /// The class of Weather to spawn.
   UPROPERTY(Category = "CARLA Game Mode", EditAnywhere)
@@ -91,6 +99,9 @@ private:
 
   UPROPERTY()
   TArray<ACarlaActorFactory *> ActorFactoryInstances;
+
+  UPROPERTY()
+  ATrafficLightManager* TrafficLightManager = nullptr;
 
   boost::optional<carla::road::Map> Map;
 

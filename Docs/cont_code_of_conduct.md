@@ -1,5 +1,12 @@
 # Contributor Covenant Code of Conduct
 
+*   [__Our pledge__](#our-pledge)  
+*   [__Our standards__](#our-standards)  
+*   [__Our responsibilities__](#our-responsibilities)  
+*   [__Scope__](#scope)  
+*   [__Enforcement__](#enforcement)  
+*   [__Attribution__](#attribution)  
+
 ---
 ## Our Pledge
 
@@ -60,7 +67,7 @@ further defined and clarified by project maintainers.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported by contacting the project team at [INSERT EMAIL ADDRESS]. All
+reported by contacting the project team at info-carla@osvf.org. All
 complaints will be reviewed and investigated and will result in a response that
 is deemed necessary and appropriate to the circumstances. The project team is
 obligated to maintain confidentiality with regard to the reporter of an incident.

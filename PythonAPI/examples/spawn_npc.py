@@ -23,10 +23,11 @@ except IndexError:
 
 import carla
 
+from carla import VehicleLightState as vls
+
 import argparse
 import logging
-import random
-
+from numpy import random
 
 def main():
     argparser = argparse.ArgumentParser(
@@ -82,9 +83,19 @@ def main():
         '--hybrid',
         action='store_true',
         help='Enanble')
+    argparser.add_argument(
+        '-s', '--seed',
+        metavar='S',
+        type=int,
+        help='Random device seed')
+    argparser.add_argument(
+        '--car-lights-on',
+        action='store_true',
+        default=False,
+        help='Enanble car lights')
     args = argparser.parse_args()
 
-    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.CRITICAL)
+    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
     vehicles_list = []
     walkers_list = []
@@ -92,20 +103,22 @@ def main():
     client = carla.Client(args.host, args.port)
     client.set_timeout(10.0)
     synchronous_master = False
+    random.seed(args.seed if args.seed is not None else int(time.time()))
 
     try:
         world = client.get_world()
 
         traffic_manager = client.get_trafficmanager(args.tm_port)
-        traffic_manager.set_global_distance_to_leading_vehicle(2.0)
-        traffic_manager.set_synchronous_mode(False)
-
+        traffic_manager.set_global_distance_to_leading_vehicle(1.0)
         if args.hybrid:
             traffic_manager.set_hybrid_physics_mode(True)
+        if args.seed is not None:
+            traffic_manager.set_random_device_seed(args.seed)
+
 
         if args.sync:
             settings = world.get_settings()
-            #traffic_manager.set_synchronous_mode(True)
+            traffic_manager.set_synchronous_mode(True)
             if not settings.synchronous_mode:
                 synchronous_master = True
                 settings.synchronous_mode = True
@@ -124,6 +137,8 @@ def main():
             blueprints = [x for x in blueprints if not x.id.endswith('cybertruck')]
             blueprints = [x for x in blueprints if not x.id.endswith('t2')]
 
+        blueprints = sorted(blueprints, key=lambda bp: bp.id)
+
         spawn_points = world.get_map().get_spawn_points()
         number_of_spawn_points = len(spawn_points)
 
@@ -137,6 +152,7 @@ def main():
         # @todo cannot import these directly.
         SpawnActor = carla.command.SpawnActor
         SetAutopilot = carla.command.SetAutopilot
+        SetVehicleLightState = carla.command.SetVehicleLightState
         FutureActor = carla.command.FutureActor
 
         # --------------
@@ -154,7 +170,16 @@ def main():
                 driver_id = random.choice(blueprint.get_attribute('driver_id').recommended_values)
                 blueprint.set_attribute('driver_id', driver_id)
             blueprint.set_attribute('role_name', 'autopilot')
-            batch.append(SpawnActor(blueprint, transform).then(SetAutopilot(FutureActor, True, traffic_manager.get_port())))
+
+            # prepare the light state of the cars to spawn
+            light_state = vls.NONE
+            if args.car_lights_on:
+                light_state = vls.Position | vls.LowBeam | vls.LowBeam
+
+            # spawn the cars and set their autopilot and light state all together
+            batch.append(SpawnActor(blueprint, transform)
+                .then(SetAutopilot(FutureActor, True, traffic_manager.get_port()))
+                .then(SetVehicleLightState(FutureActor, light_state)))
 
         for response in client.apply_batch_sync(batch, synchronous_master):
             if response.error:

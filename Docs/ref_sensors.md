@@ -1,17 +1,18 @@
 # Sensors reference
 
-  * [__Collision detector__](#collision-detector)
-  * [__Depth camera__](#depth-camera)
-  * [__GNSS sensor__](#gnss-sensor)
-  * [__IMU sensor__](#imu-sensor)
-  * [__Lane invasion detector__](#lane-invasion-detector)
-  * [__Lidar raycast sensor__](#lidar-raycast-sensor)
-  * [__Obstacle detector__](#obstacle-detector)
-  * [__Radar sensor__](#radar-sensor)
-  * [__RGB camera__](#rgb-camera)
-  * [__RSS sensor__](#rss-sensor)
-  * [__Semantic segmentation camera__](#semantic-segmentation-camera)
-
+*   [__Collision detector__](#collision-detector)  
+*   [__Depth camera__](#depth-camera)  
+*   [__GNSS sensor__](#gnss-sensor)  
+*   [__IMU sensor__](#imu-sensor)  
+*   [__Lane invasion detector__](#lane-invasion-detector)  
+*   [__LIDAR sensor__](#lidar-sensor)  
+*   [__Obstacle detector__](#obstacle-detector)  
+*   [__Radar sensor__](#radar-sensor)  
+*   [__RGB camera__](#rgb-camera)  
+*   [__RSS sensor__](#rss-sensor)  
+*   [__Semantic LIDAR sensor__](#semantic-lidar-sensor)  
+*   [__Semantic segmentation camera__](#semantic-segmentation-camera)  
+*   [__DVS camera__](#dvs-camera)  
 
 ---
 ## Collision detector
@@ -79,7 +80,13 @@ in_meters = 1000 * normalized
 The output [carla.Image](python_api.md#carla.Image) should then be saved to disk using a [carla.colorConverter](python_api.md#carla.ColorConverter) that will turn the distance stored in RGB channels into a __[0,1]__ float containing the distance and then translate this to grayscale.
 There are two options in [carla.colorConverter](python_api.md#carla.ColorConverter) to get a depth view: __Depth__ and __Logaritmic depth__. The precision is milimetric in both, but the logarithmic approach provides better results for closer objects.
 
-![ImageDepth](img/capture_depth.png)
+```py
+...
+raw_image.save_to_disk("path/to/save/converted/image",carla.Depth)
+```
+
+
+![ImageDepth](img/ref_sensors_depth.jpg)
 
 
 #### Basic camera attributes
@@ -462,28 +469,41 @@ This sensor does not have any configurable attribute.
 </table>
 
 ---
-## Lidar raycast sensor
+## LIDAR sensor
 
 * __Blueprint:__ sensor.lidar.ray_cast
 * __Output:__ [carla.LidarMeasurement](python_api.md#carla.LidarMeasurement) per step (unless `sensor_tick` says otherwise).
 
-This sensor simulates a rotating Lidar implemented using ray-casting.
-The points are computed by adding a laser for each channel distributed in the vertical FOV. The rotation is simulated computing the horizontal angle that the Lidar rotated in a frame. The point cloud is calculated by doing a ray-cast for each laser in every step:
+This sensor simulates a rotating LIDAR implemented using ray-casting.
+The points are computed by adding a laser for each channel distributed in the vertical FOV. The rotation is simulated computing the horizontal angle that the Lidar rotated in a frame. The point cloud is calculated by doing a ray-cast for each laser in every step.  
 `points_per_channel_each_step = points_per_second / (FPS * channels)`
 
-A Lidar measurement contains a packet with all the points generated during a `1/FPS` interval. During this interval the physics are not updated so all the points in a measurement reflect the same "static picture" of the scene.
+A LIDAR measurement contains a package with all the points generated during a `1/FPS` interval. During this interval the physics are not updated so all the points in a measurement reflect the same "static picture" of the scene.  
 
-This output contains a cloud of simulation points and thus, can be iterated to retrieve a list of their [`carla.Location`](python_api.md#carla.Location):
+This output contains a cloud of simulation points and thus, it can be iterated to retrieve a list of their [`carla.Location`](python_api.md#carla.Location):
 
 ```py
 for location in lidar_measurement:
     print(location)
 ```
 
-!!! Tip
-    Running the simulator at [fixed time-step](adv_synchrony_timestep.md) it is possible to tune the rotation for each measurement. Adjust the step and the rotation frequency to get, for instance, a 360 view each measurement.
+The information of the LIDAR measurement is enconded 4D points. Being the first three, the space points in xyz coordinates and the last one intensity loss during the travel. This intensity is computed by the following formula.  
+<br>
+![LidarIntensityComputation](img/lidar_intensity.jpg)  
 
-![LidarPointCloud](img/lidar_point_cloud.gif)
+`a` — Attenuation coefficient. This may depend on the sensor's wavelenght, and the conditions of the atmosphere. It can be modified with the LIDAR attribute `atmosphere_attenuation_rate`.  
+`d` — Distance from the hit point to the sensor.  
+
+For a better realism, points in the cloud can be dropped off. This is an easy way to simulate loss due to external perturbations. This can done combining two different.  
+
+*   __General drop-off__ — Proportion of points that are dropped off randomly. This is done before the tracing, meaning the points being dropped are not calculated, and therefore improves the performance. If `dropoff_general_rate = 0.5`, half of the points will be dropped.
+*   __Instensity-based drop-off__ — For each point detected, and extra drop-off is performed with a probability based in the computed intensity. This probability is determined by two parameters. `dropoff_zero_intensity` is the probability of points with zero intensity to be dropped. `dropoff_intensity_limit` is a threshold intensity above which no points will be dropped. The probability of a point within the range to be dropped is a linear proportion based on these two parameters.  
+
+Additionally, the `noise_stddev` attribute makes for a noise model to simulate unexpected deviations that appear in real-life sensors. For positive values, each point is randomly perturbed along the vector of the laser ray. The result is a LIDAR sensor with perfect angular positioning, but noisy distance measurement.
+
+The rotation of the LIDAR can be tuned to cover a specific angle on every simulation step (using a [fixed time-step](adv_synchrony_timestep.md)). For example, to rotate once per step (full circle output, as in the picture below), the rotation frequency and the simulated FPS should be equal. <br> __1.__ Set the sensor's frequency `sensors_bp['lidar'][0].set_attribute('rotation_frequency','10')`. <br> __2.__ Run the simulation using `python3 config.py --fps=10`.  
+
+![LidarPointCloud](img/lidar_point_cloud.jpg)
 
 #### Lidar attributes
 
@@ -514,7 +534,7 @@ for location in lidar_measurement:
 <td><code>rotation_frequency</code></td>
 <td>float</td>
 <td>10.0</td>
-<td>Lidar rotation frequency.</td>
+<td>LIDAR rotation frequency.</td>
 <tr>
 <td><code>upper_fov</code></td>
 <td>float</td>
@@ -526,10 +546,35 @@ for location in lidar_measurement:
 <td>-30.0</td>
 <td>Angle in degrees of the lowest laser.</td>
 <tr>
+<td><code>atmosphere_attenuation_rate</code></td>
+<td>float</td>
+<td>0.004</td>
+<td>Coefficient that measures the LIDAR instensity loss per meter. Check the intensity computation above.</td>
+<tr>
+<td><code>dropoff_general_rate</code></td>
+<td>float</td>
+<td>0.45</td>
+<td>General proportion of points that are randomy dropped.</td>
+<tr>
+<td><code>dropoff_intensity_limit</code></td>
+<td>float</td>
+<td>0.8</td>
+<td>For the intensity based drop-off, the threshold intensity value above which no points are dropped.</td>
+<tr>
+<td><code>dropoff_zero_intensity</code></td>
+<td>float</td>
+<td>0.4</td>
+<td>For the intensity based drop-off, the probability of each point with zero intensity being dropped.</td>
+<tr>
 <td><code>sensor_tick</code></td>
 <td>float</td>
 <td>0.0</td>
 <td>Simulation seconds between sensor captures (ticks).</td>
+<tr>
+<td><code>noise_stddev</code></td>
+<td>float</td>
+<td>0.0</td>
+<td>Standard deviation of the noise model to disturb each point along the vector of its raycast.</td>
 </tbody>
 </table>
 <br>
@@ -558,11 +603,11 @@ for location in lidar_measurement:
 <tr>
 <td><code>horizontal_angle</code></td>
 <td>float</td>
-<td>Angle (radians) in the XY plane of the lidar this frame.</td>
+<td>Angle (radians) in the XY plane of the LIDAR in the current frame.</td>
 <tr>
 <td><code>channels</code></td>
 <td>int</td>
-<td>Number of channels (lasers) of the lidar.</td>
+<td>Number of channels (lasers) of the LIDAR.</td>
 <tr>
 <td><code>get_point_count(channel)</code></td>
 <td>int</td>
@@ -570,7 +615,7 @@ for location in lidar_measurement:
 <tr>
 <td><code>raw_data</code></td>
 <td>bytes</td>
-<td>Array of 32-bits floats (XYZ of each point).</td>
+<td>Array of 32-bits floats (XYZI of each point).</td>
 </tbody>
 </table>
 
@@ -675,7 +720,7 @@ points = np.reshape(points, (len(radar_data), 4))
 
 The provided script `manual_control.py` uses this sensor to show the points being detected and paint them white when static, red when moving towards the object and blue when moving away:
 
-![ImageRadar](img/sensor_radar.png)
+![ImageRadar](img/ref_sensors_radar.jpg)
 
 <table class ="defTable">
 <thead>
@@ -779,7 +824,7 @@ If `enable_postprocess_effects` is enabled, a set of post-process effects is app
 The `sensor_tick` tells how fast we want the sensor to capture the data.
 A value of 1.5 means that we want the sensor to capture data each second and a half. By default a value of 0.0 means as fast as possible.
 
-![ImageRGB](img/capture_scenefinal.png)
+![ImageRGB](img/ref_sensors_rgb.jpg)
 
 #### Basic camera attributes
 
@@ -792,7 +837,12 @@ A value of 1.5 means that we want the sensor to capture data each second and a h
 </thead>
 <tbody>
 <td>
-<code>fov</code> </td>
+<code>bloom_intensity</code> </td>
+<td>float</td>
+<td>0.675</td>
+<td>Intensity for the bloom post-process effect, <code>0.0</code> for disabling it.</td>
+<tr>
+<td><code>fov</code> </td>
 <td>float</td>
 <td>90.0</td>
 <td>Horizontal field of view in degrees.</td>
@@ -814,13 +864,18 @@ A value of 1.5 means that we want the sensor to capture data each second and a h
 <tr>
 <td><code>iso</code></td>
 <td>float</td>
-<td>1200.0</td>
+<td>100.0</td>
 <td>The camera sensor sensitivity.</td>
 <tr>
 <td><code>gamma</code></td>
 <td>float</td>
 <td>2.2</td>
 <td>Target gamma value of the camera.</td>
+<tr>
+<td><code>lens_flare_intensity</code></td>
+<td>float</td>
+<td>0.1</td>
+<td>Intensity for the lens flare post-process effect, <code>0.0</code> for disabling it.</td>
 <tr>
 <td><code>sensor_tick</code></td>
 <td>float</td>
@@ -829,7 +884,7 @@ A value of 1.5 means that we want the sensor to capture data each second and a h
 <tr>
 <td><code>shutter_speed</code></td>
 <td>float</td>
-<td>60.0</td>
+<td>200.0</td>
 <td>The camera shutter speed in seconds (1.0/s).</td>
 </tbody>
 </table>
@@ -910,22 +965,22 @@ Since these effects are provided by UE, please make sure to check their document
 <tr>
 <td><code>exposure_mode</code> </td>
 <td>str</td>
-<td><code>manual</code></td>
+<td><code>histogram</code></td>
 <td>Can be <code>manual</code> or <code>histogram</code>. More in <a href="https://docs.unrealengine.com/en-US/Engine/Rendering/PostProcessEffects/AutomaticExposure/index.html">UE4 docs</a>.</td>
 <tr>
 <td><code>exposure_compensation</code> </td>
 <td>float</td>
-<td>3.0</td>
+<td><b>Linux:</b> -1.5<br><b>Windows:</b> 0.0</td>
 <td>Logarithmic adjustment for the exposure. 0: no adjustment, -1:2x darker, -2:4 darker, 1:2x brighter, 2:4x brighter.</td>
 <tr>
 <td><code>exposure_min_bright</code> </td>
 <td>float</td>
-<td>0.1</td>
+<td>7.0</td>
 <td>In <code>exposure_mode: "histogram"</code>. Minimum brightness for auto exposure. The lowest the eye can adapt within. Must be greater than 0 and less than or equal to <code>exposure_max_bright</code>.</td>
 <tr>
 <td><code>exposure_max_bright</code> </td>
 <td>float</td>
-<td>2.0</td>
+<td>9.0</td>
 <td>In `exposure_mode: "histogram"`. Maximum brightness for auto exposure. The highestthe eye can adapt within. Must be greater than 0 and greater than or equal to `exposure_min_bright`.</td>
 <tr>
 <td><code>exposure_speed_up</code> </td>
@@ -1155,6 +1210,7 @@ The sensor allows to control the considered route by providing some key points, 
 <th>Description</th>
 </thead>
 <tbody>
+<tr>
 <td><code>routing_targets</code></td>
 <td>Get the current list of routing targets used for route.</td>
 <tr>
@@ -1166,6 +1222,12 @@ The sensor allows to control the considered route by providing some key points, 
 <tr>
 <td><code>drop_route</code></td>
 <td>Discards the current route and creates a new one.</td>
+<tr>
+<td><code>register_actor_constellation_callback</code></td>
+<td>Register a callback to customize the calculations.</td>
+<tr>
+<td><code>set_log_level</code></td>
+<td>Sets the log level.</td>
 </table>
 <br>
 
@@ -1208,6 +1270,165 @@ if routing_targets:
 <td><code>ego_dynamics_on_route</code></td>
 <td><a href="../python_api#carlarssegodynamicsonroute">carla.RssEgoDynamicsOnRoute</a></td>
 <td>Current ego vehicle dynamics regarding the route.</td>
+<tr>
+<td><code>situation_snapshot</code></td>
+<td><a href="../python_api#carlarssegodynamicsonroute">carla.RssEgoDynamicsOnRoute</a></td>
+<td>Current situation snapshot extracted from the world model.</td>
+</tbody>
+</table>
+
+In case a actor_constellation_callback is registered, a call is triggered for:
+
+1. default calculation (`actor_constellation_data.other_actor=None`)
+2. per-actor calculation
+
+```py
+# Fragment of manual_control_rss.py
+# The function is registered as actor_constellation_callback
+def _on_actor_constellation_request(self, actor_constellation_data):
+    actor_constellation_result = carla.RssActorConstellationResult()
+    actor_constellation_result.rss_calculation_mode = rssmap.RssMode.NotRelevant
+    actor_constellation_result.restrict_speed_limit_mode = rssmap.RssSceneCreation.RestrictSpeedLimitMode.IncreasedSpeedLimit10
+    actor_constellation_result.ego_vehicle_dynamics = self.current_vehicle_parameters
+    actor_constellation_result.actor_object_type = rss.ObjectType.Invalid
+    actor_constellation_result.actor_dynamics = self.current_vehicle_parameters
+
+    actor_id = -1
+    actor_type_id = "none"
+    if actor_constellation_data.other_actor != None:
+        # customize actor_constellation_result for specific actor
+        ...
+    else:
+        # default
+        ...
+    return actor_constellation_result
+```
+
+
+---
+## Semantic LIDAR sensor
+
+* __Blueprint:__ sensor.lidar.ray_cast_semantic
+* __Output:__ [carla.SemanticLidarMeasurement](python_api.md#carla.SemanticLidarMeasurement) per step (unless `sensor_tick` says otherwise).
+
+This sensor simulates a rotating LIDAR implemented using ray-casting that exposes all the information about the raycast hit. Its behaviour is quite similar to the [LIDAR sensor](#lidar-sensor), but there are two main differences between them.  
+
+*   The raw data retrieved by the semantic LIDAR includes more data per point.
+	*   Coordinates of the point (as the normal LIDAR does).  
+	*   The cosine between the angle of incidence and the normal of the surface hit. 
+	*   Instance and semantic ground-truth. Basically the index of the CARLA object hit, and its semantic tag.  
+*   The semantic LIDAR does not include neither intensity, drop-off nor noise model attributes.  
+
+The points are computed by adding a laser for each channel distributed in the vertical FOV. The rotation is simulated computing the horizontal angle that the LIDAR rotated in a frame. The point cloud is calculated by doing a ray-cast for each laser in every step.  
+```sh
+points_per_channel_each_step = points_per_second / (FPS * channels)
+```
+
+A LIDAR measurement contains a package with all the points generated during a `1/FPS` interval. During this interval the physics are not updated so all the points in a measurement reflect the same "static picture" of the scene.
+
+This output contains a cloud of lidar semantic detections and therefore, it can be iterated to retrieve a list of their [`carla.SemanticLidarDetection`](python_api.md#carla.SemanticLidarDetection):
+
+```py
+for detection in semantic_lidar_measurement:
+    print(detection)
+```
+
+The rotation of the LIDAR can be tuned to cover a specific angle on every simulation step (using a [fixed time-step](adv_synchrony_timestep.md)). For example, to rotate once per step (full circle output, as in the picture below), the rotation frequency and the simulated FPS should be equal. <br> 
+__1.__ Set the sensor's frequency `sensors_bp['lidar'][0].set_attribute('rotation_frequency','10')`. <br> 
+__2.__ Run the simulation using `python3 config.py --fps=10`.
+
+![LidarPointCloud](img/semantic_lidar_point_cloud.jpg)
+
+#### SemanticLidar attributes
+
+<table class ="defTable">
+<thead>
+<th>Blueprint attribute</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</thead>
+<tbody>
+<td>
+<code>channels</code> </td>
+<td>int</td>
+<td>32</td>
+<td>Number of lasers.</td>
+<tr>
+<td><code>range</code></td>
+<td>float</td>
+<td>10.0</td>
+<td>Maximum distance to measure/raycast in meters (centimeters for CARLA 0.9.6 or previous).</td>
+<tr>
+<td><code>points_per_second</code></td>
+<td>int</td>
+<td>56000</td>
+<td>Points generated by all lasers per second.</td>
+<tr>
+<td><code>rotation_frequency</code></td>
+<td>float</td>
+<td>10.0</td>
+<td>LIDAR rotation frequency.</td>
+<tr>
+<td><code>upper_fov</code></td>
+<td>float</td>
+<td>10.0</td>
+<td>Angle in degrees of the highest laser.</td>
+<tr>
+<td><code>lower_fov</code></td>
+<td>float</td>
+<td>-30.0</td>
+<td>Angle in degrees of the lowest laser.</td>
+<tr>
+<td><code>sensor_tick</code></td>
+<td>float</td>
+<td>0.0</td>
+<td>Simulation seconds between sensor captures (ticks).</td>
+</tbody>
+</table>
+<br>
+
+#### Output attributes
+
+<table class ="defTable">
+<thead>
+<th>Sensor data attribute</th>
+<th>Type</th>
+<th>Description</th>
+</thead>
+<tbody>
+<td>
+<code>frame</code> </td>
+<td>int</td>
+<td>Frame number when the measurement took place.</td>
+<tr>
+<td><code>timestamp</code></td>
+<td>double</td>
+<td>Simulation time of the measurement in seconds since the beginning of the episode.</td>
+<tr>
+<td><code>transform</code></td>
+<td><a href="../python_api#carlatransform">carla.Transform</a></td>
+<td>Location and rotation in world coordinates of the sensor at the time of the measurement.</td>
+<tr>
+<td><code>horizontal_angle</code></td>
+<td>float</td>
+<td>Angle (radians) in the XY plane of the LIDAR in the current frame.</td>
+<tr>
+<td><code>channels</code></td>
+<td>int</td>
+<td>Number of channels (lasers) of the LIDAR.</td>
+<tr>
+<td><code>get_point_count(channel)</code></td>
+<td>int</td>
+<td>Number of points per channel captured in the current frame.</td>
+<tr>
+<td><code>raw_data</code></td>
+<td>bytes</td>
+<td>Array containing the point cloud with instance and semantic information. For each point, four 32-bits floats are stored. <br>
+- XYZ coordinates. <br>
+- cosine of the incident angle. <br>
+- Unsigned int containing the index of the object hit.  <br>
+- Unsigned int containing the semantic tag of the object it.  
 </tbody>
 </table>
 
@@ -1220,8 +1441,16 @@ if routing_targets:
 This camera classifies every object in sight by displaying it in a different color according to its tags (e.g., pedestrians in a different color than vehicles).
 When the simulation starts, every element in scene is created with a tag. So it happens when an actor is spawned. The objects are classified by their relative file path in the project. For example, meshes stored in `Unreal/CarlaUE4/Content/Static/Pedestrians` are tagged as `Pedestrian`.  
 
+![ImageSemanticSegmentation](img/ref_sensors_semantic.jpg)
+
 The server provides an image with the tag information __encoded in the red channel__: A pixel with a red value of `x` belongs to an object with tag `x`.
 This raw [carla.Image](python_api.md#carla.Image) can be stored and converted it with the help of __CityScapesPalette__  in [carla.ColorConverter](python_api.md#carla.ColorConverter) to apply the tags information and show picture with the semantic segmentation.
+
+```py
+...
+raw_image.save_to_disk("path/to/save/converted/image",carla.cityScapesPalette)
+```
+
 The following tags are currently available:
 
 <table class ="defTable">
@@ -1229,59 +1458,123 @@ The following tags are currently available:
 <th>Value</th>
 <th>Tag</th>
 <th>Converted color</th>
+<th>Description</th>
 </thead>
 <tbody>
 <td><code>0</code> </td>
 <td>Unlabeled</td>
-<td>(  0,   0,   0)</td>
+<td><code>(0, 0, 0)</code></td>
+<td>Elements that have not been categorized are considered <code>Unlabeled</code>. This category is meant to be empty or at least contain elements with no collisions.</td>
 <tr>
 <td><code>1</code> </td>
 <td>Building</td>
-<td>( 70,  70,  70)</td>
+<td><code>(70, 70, 70)</code></td>
+<td>Buildings like houses, skyscrapers,... and the elements attached to them. <br> E.g. air conditioners, scaffolding, awning or ladders and much more.</td>
 <tr>
 <td><code>2</code> </td>
 <td>Fence</td>
-<td>(190, 153, 153)</td>
+<td><code>(100, 40, 40)</code></td>
+<td>Barriers, railing, or other upright structures. Basically wood or wire assemblies that enclose an area of ground.</td>
 <tr>
 <td><code>3</code> </td>
 <td>Other</td>
-<td>(250, 170, 160)</td>
+<td><code>(55, 90, 80)</code></td>
+<td> Everything that does not belong to any other category.</td>
 <tr>
 <td><code>4</code> </td>
 <td>Pedestrian</td>
-<td>(220,  20,  60)</td>
+<td><code>(220,  20,  60)</code></td>
+<td>Humans that walk or ride/drive any kind of vehicle or mobility system. <br> E.g. bicycles or scooters, skateboards, horses, roller-blades, wheel-chairs, etc.</td>
 <tr>
 <td><code>5</code> </td>
 <td>Pole</td>
-<td>(153, 153, 153)</td>
+<td><code>(153, 153, 153)</code></td>
+<td>Small mainly vertically oriented pole. If the pole has a horizontal part (often for traffic light poles) this is also considered pole. <br> E.g. sign pole, traffic light poles.</td>
 <tr>
 <td><code>6</code> </td>
-<td>Road line</td>
-<td>(157, 234,  50)</td>
+<td>RoadLine</td>
+<td><code>(157, 234, 50)</code></td>
+<td>The markings on the road.</td>
 <tr>
 <td><code>7</code> </td>
 <td>Road</td>
-<td>(128,  64, 128)</td>
+<td><code>(128, 64, 128)</code></td>
+<td>Part of ground on which cars usually drive. <br> E.g. lanes in any directions, and streets.</td>
 <tr>
 <td><code>8</code> </td>
-<td>Sidewalk</td>
-<td>(244,  35, 232)</td>
+<td>SideWalk</td>
+<td><code>(244, 35, 232)</code></td>
+<td>Part of ground designated for pedestrians or cyclists. Delimited from the road by some obstacle (such as curbs or poles), not only by markings. This label includes a possibly delimiting curb, traffic islands (the walkable part), and pedestrian zones.</td>
 <tr>
 <td><code>9</code> </td>
 <td>Vegetation</td>
-<td>(107, 142,  35)</td>
+<td><code>(107, 142, 35)</code></td>
+<td> Trees, hedges, all kinds of vertical vegetation. Ground-level vegetation is considered <code>Terrain</code>.</td>
 <tr>
 <td><code>10</code> </td>
-<td>Car</td>
-<td>(  0,   0, 142)</td>
+<td>Vehicles</td>
+<td><code>(0, 0, 142)</code></td>
+<td>Cars, vans, trucks, motorcycles, bikes, buses, trains.</td>
 <tr>
 <td><code>11</code> </td>
 <td>Wall</td>
-<td>(102, 102, 156)</td>
+<td><code>(102, 102, 156)</code></td>
+<td>Individual standing walls. Not part of a building.</td>
 <tr>
 <td><code>12</code> </td>
-<td>Traffic sign</td>
-<td>(220, 220,   0)</td>
+<td>TrafficSign</td>
+<td><code>(220, 220, 0)</code></td>
+<td>Signs installed by the state/city authority, usually for traffic regulation. This category does not include the poles where signs are attached to. <br> E.g. traffic- signs, parking signs, direction signs...</td>
+<tr>
+<td><code>13</code> </td>
+<td>Sky</td>
+<td><code>(70, 130, 180)</code></td>
+<td>Open sky. Includes clouds and the sun.</td>
+<tr>
+<td><code>14</code> </td>
+<td>Ground</td>
+<td><code>(81, 0, 81)</code></td>
+<td>Any horizontal ground-level structures that does not match any other category. For example areas shared by vehicles and pedestrians, or flat roundabouts delimited from the road by a curb.</td>
+<tr>
+<td><code>15</code> </td>
+<td>Bridge</td>
+<td><code>(150, 100, 100)</code></td>
+<td>Only the structure of the bridge. Fences, people, vehicles, an other elements on top of it are labeled separately.</td>
+<tr>
+<td><code>16</code> </td>
+<td>RailTrack</td>
+<td><code>(230, 150, 140)</code></td>
+<td>All kind of rail tracks that are non-drivable by cars. <br> E.g. subway and train rail tracks.</td>
+<tr>
+<td><code>17</code> </td>
+<td>GuardRail</td>
+<td><code>(180, 165, 180)</code></td>
+<td>All types of guard rails/crash barriers.</td>
+<tr>
+<td><code>18</code> </td>
+<td>TrafficLight</td>
+<td><code>(250, 170, 30)</code></td>
+<td>Traffic light boxes without their poles.</td>
+<tr>
+<td><code>19</code> </td>
+<td>Static</td>
+<td><code>(110, 190, 160)</code></td>
+<td>Elements in the scene and props that are immovable. <br> E.g. fire hydrants, fixed benches, fountains, bus stops, etc.</td>
+<tr>
+<td><code>20</code> </td>
+<td>Dynamic</td>
+<td><code>(170, 120, 50)</code></td>
+<td>Elements whose position is susceptible to change over time. <br> E.g. Movable trash bins, buggies, bags, wheelchairs, animals, etc.</td>
+<tr>
+<td><code>21</code> </td>
+<td>Water</td>
+<td><code>(45, 60, 150)</code></td>
+<td>Horizontal water surfaces. <br> E.g. Lakes, sea, rivers.</td>
+<tr>
+<td><code>22</code> </td>
+<td>Terrain</td>
+<td><code>(145, 170, 100)</code></td>
+<td>Grass, ground-level vegetation, soil or sand. These areas are not meant to be driven on. This label includes a possibly delimiting curb.</td>
 </tbody>
 </table>
 <br>
@@ -1289,8 +1582,6 @@ The following tags are currently available:
 !!! Note
     **Adding new tags**:
     It requires some C++ coding. Add a new label to the `ECityObjectLabel` enum in "Tagger.h", and its corresponding filepath check inside `GetLabelByFolderName()` function in "Tagger.cpp".
-
-![ImageSemanticSegmentation](img/capture_semseg.png)
 
 #### Basic camera attributes
 
@@ -1409,4 +1700,94 @@ The following tags are currently available:
 </tbody>
 </table>
 
+<br>
+
+---
+## DVS camera
+
+*   __Blueprint:__ sensor.camera.dvs  
+*   __Output:__ [carla.DVSEventArray](python_api.md#carla.DVSEventArray) per step (unless `sensor_tick` says otherwise).  
+
+
+A Dynamic Vision Sensor (DVS) or Event camera is a sensor that works radically differently from a conventional camera. Instead of capturing
+intensity images at a fixed rate, event cameras measure changes of intensity asynchronously, in the form of a stream of events, which encode per-pixel
+brightness changes. Event cameras possess outstanding properties when compared to standard cameras. They have a very high dynamic range (140 dB
+versus 60 dB), no motion blur, and high temporal resolution (in the order of microseconds). Event cameras are thus sensors that can provide high-quality
+visual information even in challenging high-speed scenarios and high dynamic range environments, enabling new application domains for vision-based
+algorithms.
+
+The DVS camera outputs a stream of events. An event `e=(x,y,t,pol)` is triggered at a pixel `x`, `y` at a timestamp `t` when the change in
+logarithmic intensity `L` reaches a predefined constant threshold `C` (typically between 15% and 30%).
+
+``
+L(x,y,t) - L(x,y,t-\delta t) = pol C
+``
+
+`t-\delta t` is the time when the last event at that pixel was triggered and `pol` is the polarity of the event according to the sign of the
+brightness change. The polarity is positive `+1` when there is increment in brightness and negative `-1` when a decrement in brightness occurs. The
+working principles depicted in the following figure. The standard camera outputs frames at a fixed rate, thus sending redundant information
+when no motion is present in the scene. In contrast, event cameras are data-driven sensors that respond to brightness changes with microsecond
+latency. At the plot, a positive (resp. negative) event (blue dot, resp. red dot) is generated whenever the (signed) brightness change exceeds the
+contrast threshold `C` for one dimension `x` over time `t`. Observe how the event rate grows when the signal changes rapidly.
+
+![DVSCameraWorkingPrinciple](img/sensor_dvs_scheme.jpg)
+
+The current implementation of the DVS camera works in a uniform sampling manner between two consecutive synchronous frames. Therefore, in order to
+emulate the high temporal resolution (order of microseconds) of a real event camera, the sensor requires to execute at a high frequency (much higher
+frequency than a conventional camera). Effectively, the number of events increases as faster a CARLA car drives. Therefore, the sensor frequency
+should increase accordingly with the dynamic of the scene. The user should find their balance between time accuracy and computational cost.
+
+The provided script `manual_control.py` uses the DVS camera in order to show how to configure the sensor, how to get the stream of events and how to depict such events in an image format, usually called event frame.
+
+![DVSCameraWorkingPrinciple](img/sensor_dvs.gif)
+
+DVS is a camera and therefore has all the attributes available in the RGB camera. Nevertheless, there are few attributes exclusive to the working principle of an Event camera.
+
+#### DVS camera attributes
+
+<table class ="defTable">
+<thead>
+<th>Blueprint attribute</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</thead>
+<tbody>
+<td>
+<code>positive_threshold</code> </td>
+<td>float</td>
+<td>0.3</td>
+<td>Positive threshold C associated to a increment in brightness change (0-1).</td>
+<tr>
+<td><code>negative_threshold</code></td>
+<td>float</td>
+<td>0.3</td>
+<td>Negative threshold C associated to a decrement in brightness change (0-1).</td>
+<tr>
+<td><code>sigma_positive_threshold</code></td>
+<td>float</td>
+<td>0</td>
+<td>White noise standard deviation for positive events (0-1).</td>
+<tr>
+<td><code>sigma_negative_threshold</code></td>
+<td>float</td>
+<td>0</td>
+<td>White noise standard deviation for negative events (0-1).</td>
+<tr>
+<td><code>refractory_period_ns</code></td>
+<td>int</td>
+<td>0.0</td>
+<td> Refractory period (time during which a pixel cannot fire events just after it fired one), in nanoseconds. It limits the highest frequency of triggering events.</td>
+<tr>
+<td><code>use_log</code></td>
+<td>bool</td>
+<td>true</td>
+<td>Whether to work in the logarithmic intensity scale.</td>
+<tr>
+<td><code>log_eps</code></td>
+<td>float</td>
+<td>0.001</td>
+<td>Epsilon value used to convert images to log: <code>L = log(eps + I / 255.0)</code>.<br> Where <code>I</code> is the grayscale value of the RGB image: <br><code>I = 0.2989*R +  0.5870*G + 0.1140*B</code>.</td>
+</tbody>
+</table>
 <br>

@@ -47,6 +47,12 @@ public:
   // set the animation for walkers
   void ProcessReplayerAnimWalker(CarlaRecorderAnimWalker Walker);
 
+  // set the vehicle light
+  void ProcessReplayerLightVehicle(CarlaRecorderLightVehicle LightVehicle);
+
+  // set scene lights
+  void ProcessReplayerLightScene(CarlaRecorderLightScene LightScene);
+
   // replay finish
   bool ProcessReplayerFinish(bool bApplyAutopilot, bool bIgnoreHero, std::unordered_map<uint32_t, bool> &IsHero);
 
@@ -58,6 +64,8 @@ public:
 
   // set the animation speed for walkers
   void SetWalkerSpeed(uint32_t ActorId, float Speed);
+
+  void RemoveStaticProps();
 
 private:
 

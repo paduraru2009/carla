@@ -70,8 +70,8 @@ static auto FWorldObserver_GetActorState(const FActorView &View, const FActorReg
     auto TrafficLight = Cast<ATrafficLightBase>(View.GetActor());
     if (TrafficLight != nullptr)
     {
-      UTrafficLightComponent* TrafficLightComponent =
-        Cast<UTrafficLightComponent>(TrafficLight->FindComponentByClass<UTrafficLightComponent>());
+      auto* TrafficLightComponent =
+          TrafficLight->GetTrafficLightComponent();
 
       using TLS = carla::rpc::TrafficLightState;
 
@@ -89,8 +89,8 @@ static auto FWorldObserver_GetActorState(const FActorView &View, const FActorReg
       }
       else
       {
-        UTrafficLightController* Controller =  TrafficLightComponent->GetController();
-        ATrafficLightGroup* Group = TrafficLightComponent->GetGroup();
+        const UTrafficLightController* Controller =  TrafficLightComponent->GetController();
+        const ATrafficLightGroup* Group = TrafficLightComponent->GetGroup();
 
         if (!Controller)
         {
@@ -117,7 +117,7 @@ static auto FWorldObserver_GetActorState(const FActorView &View, const FActorReg
           state.traffic_light_data.green_time = Controller->GetGreenTime();
           state.traffic_light_data.yellow_time = Controller->GetYellowTime();
           state.traffic_light_data.red_time = Controller->GetRedTime();
-          state.traffic_light_data.elapsed_time = Group->GetElapsedTime();
+          state.traffic_light_data.elapsed_time = Controller->GetElapsedTime();
           state.traffic_light_data.time_is_frozen = Group->IsFrozen();
           state.traffic_light_data.pole_index = TrafficLight->GetPoleIndex();
         }
@@ -175,11 +175,15 @@ static carla::geom::Vector3D FWorldObserver_GetAcceleration(
 static carla::Buffer FWorldObserver_Serialize(
     carla::Buffer &&buffer,
     const UCarlaEpisode &Episode,
-    float DeltaSeconds)
+    float DeltaSeconds,
+    bool MapChange,
+    bool PendingLightUpdates)
 {
 
   using Serializer = carla::sensor::s11n::EpisodeStateSerializer;
+  using SimulationState = carla::sensor::s11n::EpisodeStateSerializer::SimulationState;
   using ActorDynamicState = carla::sensor::data::ActorDynamicState;
+
 
   const auto &Registry = Episode.GetActorRegistry();
 
@@ -199,6 +203,12 @@ static carla::Buffer FWorldObserver_Serialize(
   header.episode_id = Episode.GetId();
   header.platform_timestamp = FPlatformTime::Seconds();
   header.delta_seconds = DeltaSeconds;
+
+  uint8_t simulation_state = (SimulationState::MapChange * MapChange);
+  simulation_state |= (SimulationState::PendingLightUpdate * PendingLightUpdates);
+
+  header.simulation_state = static_cast<SimulationState>(simulation_state);
+
   write_data(header);
 
   // Write every actor.
@@ -227,14 +237,20 @@ static carla::Buffer FWorldObserver_Serialize(
   return std::move(buffer);
 }
 
-void FWorldObserver::BroadcastTick(const UCarlaEpisode &Episode, float DeltaSeconds)
+void FWorldObserver::BroadcastTick(
+    const UCarlaEpisode &Episode,
+    float DeltaSecond,
+    bool MapChange,
+    bool PendingLightUpdates)
 {
   auto AsyncStream = Stream.MakeAsyncDataStream(*this, Episode.GetElapsedGameTime());
 
   auto buffer = FWorldObserver_Serialize(
       AsyncStream.PopBufferFromPool(),
       Episode,
-      DeltaSeconds);
+      DeltaSecond,
+      MapChange,
+      PendingLightUpdates);
 
   AsyncStream.Send(*this, std::move(buffer));
 }

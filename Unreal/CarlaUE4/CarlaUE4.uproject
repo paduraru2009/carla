@@ -97,11 +97,8 @@
 			"Enabled": false
 		},
 		{
-			"Name": "LidarPointCloud",
-			"Enabled": false,
-			"SupportedTargetPlatforms": [
-				"Win64"
-			]
+			"Name": "RenderDocPlugin",
+			"Enabled": true
 		}
 	]
 }

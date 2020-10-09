@@ -178,6 +178,7 @@ std::string CarlaReplayer::ReplayFile(std::string Filename, double TimeStart, do
   // if we don't need to load a new map, then start
   if (!Autoplay.Enabled)
   {
+    Helper.RemoveStaticProps();
     // process all events until the time
     ProcessToTime(TimeStart, true);
     // mark as enabled
@@ -236,6 +237,8 @@ void CarlaReplayer::CheckPlayAfterMapLoaded(void)
 
   // apply time factor
   TimeFactor = Autoplay.TimeFactor;
+
+  Helper.RemoveStaticProps();
 
   // process all events until the time
   ProcessToTime(TimeStart, true);
@@ -329,6 +332,22 @@ void CarlaReplayer::ProcessToTime(double Time, bool IsFirstTime)
       case static_cast<char>(CarlaRecorderPacketId::AnimWalker):
         if (bFrameFound)
           ProcessAnimWalker();
+        else
+          SkipPacket();
+        break;
+
+      // vehicle light animation
+      case static_cast<char>(CarlaRecorderPacketId::VehicleLight):
+        if (bFrameFound)
+          ProcessLightVehicle();
+        else
+          SkipPacket();
+        break;
+
+      // scene lights animation
+      case static_cast<char>(CarlaRecorderPacketId::SceneLight):
+        if (bFrameFound)
+          ProcessLightScene();
         else
           SkipPacket();
         break;
@@ -512,6 +531,39 @@ void CarlaReplayer::ProcessAnimWalker(void)
     {
       Helper.ProcessReplayerAnimWalker(Walker);
     }
+  }
+}
+
+void CarlaReplayer::ProcessLightVehicle(void)
+{
+  uint16_t Total;
+  CarlaRecorderLightVehicle LightVehicle;
+
+  // read Total walkers
+  ReadValue<uint16_t>(File, Total);
+  for (uint16_t i = 0; i < Total; ++i)
+  {
+    LightVehicle.Read(File);
+    LightVehicle.DatabaseId = MappedId[LightVehicle.DatabaseId];
+    // check if ignore this actor
+    if (!(IgnoreHero && IsHeroMap[LightVehicle.DatabaseId]))
+    {
+      Helper.ProcessReplayerLightVehicle(LightVehicle);
+    }
+  }
+}
+
+void CarlaReplayer::ProcessLightScene(void)
+{
+  uint16_t Total;
+  CarlaRecorderLightScene LightScene;
+
+  // read Total light events
+  ReadValue<uint16_t>(File, Total);
+  for (uint16_t i = 0; i < Total; ++i)
+  {
+    LightScene.Read(File);
+    Helper.ProcessReplayerLightScene(LightScene);
   }
 }
 

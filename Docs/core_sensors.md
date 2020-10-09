@@ -5,14 +5,14 @@ Sensors are actors that retrieve data from their surroundings. They are crucial 
 This page summarizes everything necessary to start handling sensors. It introduces the types available and a step-by-step guide of their life cycle. The specifics for every sensor can be found in the [sensors reference](ref_sensors.md).
 
 * [__Sensors step-by-step__](#sensors-step-by-step)  
-	* Setting  
-	* Spawning  
-	* Listening  
-	* Data  
+	*   [Setting](#setting)  
+	*   [Spawning](#spawning)  
+	*   [Listening](#listening)  
+	*   [Data](#data)  
 * [__Types of sensors__](#types-of-sensors)  
-	* Cameras  
-	* Detectors  
-	* Other  
+	*   [Cameras](#cameras)  
+	*   [Detectors](#detectors)  
+	*   [Other](#other)  
 
 ---
 ## Sensors step-by-step  
@@ -46,15 +46,15 @@ blueprint.set_attribute('sensor_tick', '1.0')
 
 `attachment_to` and `attachment_type`, are crucial. Sensors should be attached to a parent actor, usually a vehicle, to follow it around and gather the information. The attachment type will determine how its position is updated regarding said vehicle. 
 
-* __Rigid attachment.__ Movement is strict regarding its parent location. Cameras may show "little hops" as the position updated is not eased.  
-* __SpringArm attachment.__ Movement is eased with little accelerations and decelerations. 
+* __Rigid attachment.__ Movement is strict regarding its parent location. This is the proper attachment to retrieve data from the simulation.  
+* __SpringArm attachment.__ Movement is eased with little accelerations and decelerations. This attachment is only recommended to record videos from the simulation. The movement is smooth and "hops" are avoided when updating the cameras' positions.  
 
 ```py
 transform = carla.Transform(carla.Location(x=0.8, z=1.7))
 sensor = world.spawn_actor(blueprint, transform, attach_to=my_vehicle)
 ```
 !!! Important
-    When spawning with attachment, location must be relative to the parent actor. 
+    When spawning with attachment, location must be relative to the parent actor.  
 
 ### Listening
 
@@ -189,13 +189,21 @@ Different functionalities such as navigation, measurement of physical properties
 <td><a href="../python_api#carlaimumeasurement">carla.IMUMeasurement</a></td>
 <td>Comprises an accelerometer, a gyroscope, and a compass.</td>
 <tr>
-<td>LIDAR raycast</td>
+<td>LIDAR</td>
 <td><a href="../python_api#carlalidarmeasurement">carla.LidarMeasurement</a></td>
-<td>A rotating LIDAR. Generates a 3D point cloud modelling the surroundings.</td>
+<td>A rotating LIDAR. Generates a 4D point cloud with coordinates and intensity per point to model the surroundings.</td>
 <tr>
 <td>Radar</td>
 <td><a href="../python_api#carlaradarmeasurement">carla.RadarMeasurement</a></td>
 <td>2D point map modelling elements in sight and their movement regarding the sensor. </td>
+<tr>
+<td>RSS</td>
+<td><a href="../python_api#carlarssresponse">carla.RssResponse</a></td>
+<td>Modifies the controller applied to a vehicle according to safety checks. This sensor works in a different manner than the rest, and there is specific <a href="../adv_rss">RSS documentation</a> for it. </td>
+<tr>
+<td>Semantic LIDAR</td>
+<td><a href="../python_api#carlasemanticlidarmeasurement">carla.SemanticLidarMeasurement</a></td>
+<td>A rotating LIDAR. Generates a 3D point cloud with extra information regarding instance and semantic segmentation.</td>
 </tbody>
 </table>
 <br>

@@ -50,15 +50,21 @@ void AInertialMeasurementUnit::SetOwner(AActor *Owner)
   Super::SetOwner(Owner);
 }
 
-// Copy of FWorldObserver_GetAngularVelocity but using radiants
+// Returns the angular velocity of Actor, expressed in the frame of Actor
 static FVector FIMU_GetActorAngularVelocityInRadians(
     AActor &Actor)
 {
   const auto RootComponent = Cast<UPrimitiveComponent>(Actor.GetRootComponent());
-  const FVector AngularVelocity =
-      RootComponent != nullptr ?
-          RootComponent->GetPhysicsAngularVelocityInRadians() :
-          FVector::ZeroVector;
+
+  FVector AngularVelocity;
+
+  if (RootComponent != nullptr) {
+      const FQuat ActorGlobalRotation = RootComponent->GetComponentTransform().GetRotation();
+      const FVector GlobalAngularVelocity = RootComponent->GetPhysicsAngularVelocityInRadians();
+      AngularVelocity = ActorGlobalRotation.UnrotateVector(GlobalAngularVelocity);
+  } else {
+      AngularVelocity = FVector::ZeroVector;
+  }
 
   return AngularVelocity;
 }
@@ -122,12 +128,12 @@ carla::geom::Vector3D AInertialMeasurementUnit::ComputeAccelerometer(
   PrevLocation[1] = CurrentLocation;
   PrevDeltaTime = DeltaTime;
 
+  // Add gravitational acceleration
+  FVectorAccelerometer.Z += GRAVITY;
+
   FQuat ImuRotation =
       GetRootComponent()->GetComponentTransform().GetRotation();
   FVectorAccelerometer = ImuRotation.UnrotateVector(FVectorAccelerometer);
-
-  // Add gravitational acceleration
-  FVectorAccelerometer.Z += GRAVITY;
 
   // Cast from FVector to our Vector3D to correctly send the data in m/s^2
   // and apply the desired noise function, in this case a normal distribution

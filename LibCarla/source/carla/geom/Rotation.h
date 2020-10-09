@@ -55,6 +55,10 @@ namespace geom {
       return Math::GetRightVector(*this);
     }
 
+    Vector3D GetUpVector() const {
+      return Math::GetUpVector(*this);
+    }
+
     void RotateVector(Vector3D &in_point) const {
       // Rotates Rz(yaw) * Ry(pitch) * Rx(roll) = first x, then y, then z.
       const float cy = std::cos(Math::ToRadians(yaw));
@@ -81,6 +85,12 @@ namespace geom {
         in_point.z * (cp * cr);
 
       in_point = out_point;
+    }
+
+    Vector3D RotateVector(const Vector3D& in_point) const {
+      Vector3D out_point = in_point;
+      RotateVector(out_point);
+      return out_point;
     }
 
     void InverseRotateVector(Vector3D &in_point) const {

@@ -5,6 +5,7 @@
 // For a copy, see <https://opensource.org/licenses/MIT>.
 
 #include "Carla.h"
+#include "Carla/Game/CarlaStatics.h"
 #include "OpenDriveGenerator.h"
 #include "Traffic/TrafficLightManager.h"
 #include "Util/ProceduralCustomMesh.h"
@@ -16,6 +17,13 @@
 
 #include "Engine/Classes/Interfaces/Interface_CollisionDataProvider.h"
 #include "PhysicsEngine/BodySetupEnums.h"
+
+AProceduralMeshActor::AProceduralMeshActor()
+{
+  PrimaryActorTick.bCanEverTick = false;
+  MeshComponent = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("RootComponent"));
+  RootComponent = MeshComponent;
+}
 
 AOpenDriveGenerator::AOpenDriveGenerator(const FObjectInitializer &ObjectInitializer)
   : Super(ObjectInitializer)
@@ -36,13 +44,6 @@ bool AOpenDriveGenerator::LoadOpenDrive(const FString &OpenDrive)
     return false;
   }
 
-  CarlaMap = OpenDriveLoader::Load(carla::rpc::FromFString(OpenDrive));
-  if (!CarlaMap.has_value())
-  {
-    UE_LOG(LogCarla, Error, TEXT("The OpenDrive is invalid or not supported"));
-    return false;
-  }
-
   OpenDriveData = OpenDrive;
   return true;
 }
@@ -54,7 +55,7 @@ const FString &AOpenDriveGenerator::GetOpenDrive() const
 
 bool AOpenDriveGenerator::IsOpenDriveValid() const
 {
-  return CarlaMap.has_value();
+  return UCarlaStatics::GetGameMode(GetWorld())->GetMap().has_value();
 }
 
 void AOpenDriveGenerator::GenerateRoadMesh()
@@ -76,17 +77,15 @@ void AOpenDriveGenerator::GenerateRoadMesh()
     carla::log_warning("Missing game instance");
   }
 
-  const auto Meshes = CarlaMap->GenerateChunkedMesh(
-      Parameters.vertex_distance,
-      Parameters.max_road_length,
-      Parameters.additional_width,
-      Parameters.smooth_junctions);
+  auto& CarlaMap = UCarlaStatics::GetGameMode(GetWorld())->GetMap();
+  const auto Meshes = CarlaMap->GenerateChunkedMesh(Parameters);
   for (const auto &Mesh : Meshes) {
-    AActor *TempActor = GetWorld()->SpawnActor<AActor>();
-    UProceduralMeshComponent *TempPMC = NewObject<UProceduralMeshComponent>(TempActor);
-    TempPMC->RegisterComponent();
-    TempPMC->AttachToComponent(
-        TempActor->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+    if (!Mesh->GetVertices().size())
+    {
+      continue;
+    }
+    AProceduralMeshActor* TempActor = GetWorld()->SpawnActor<AProceduralMeshActor>();
+    UProceduralMeshComponent *TempPMC = TempActor->MeshComponent;
     TempPMC->bUseAsyncCooking = true;
     TempPMC->bUseComplexAsSimpleCollision = true;
     TempPMC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
@@ -147,7 +146,7 @@ void AOpenDriveGenerator::GenerateSpawnPoints()
     UE_LOG(LogCarla, Error, TEXT("The OpenDrive has not been loaded"));
     return;
   }
-
+  auto& CarlaMap = UCarlaStatics::GetGameMode(GetWorld())->GetMap();
   const auto Waypoints = CarlaMap->GenerateWaypointsOnRoadEntries();
   for (const auto &Wp : Waypoints)
   {
@@ -176,6 +175,12 @@ void AOpenDriveGenerator::BeginPlay()
 
   GenerateAll();
 
+  auto World = GetWorld();
+  check(World != nullptr);
+
   // Autogenerate signals
-  GetWorld()->SpawnActor<ATrafficLightManager>();
+  AActor* TrafficLightManagerActor =  UGameplayStatics::GetActorOfClass(World, ATrafficLightManager::StaticClass());
+  if(TrafficLightManagerActor == nullptr) {
+    World->SpawnActor<ATrafficLightManager>();
+  }
 }

@@ -4,10 +4,7 @@
 // This work is licensed under the terms of the MIT license.
 // For a copy, see <https://opensource.org/licenses/MIT>.
 
-#include <carla/client/Client.h>
-#include "carla/client/TrafficLight.h"
-#include "carla/client/ActorList.h"
-#include "carla/client/DebugHelper.h"
+#include "carla/client/detail/Simulator.h"
 
 #include "carla/trafficmanager/TrafficManagerRemote.h"
 
@@ -184,6 +181,10 @@ void TrafficManagerRemote::SetHybridPhysicsRadius(const float radius) {
   client.SetHybridPhysicsRadius(radius);
 }
 
+void TrafficManagerRemote::SetOSMMode(const bool mode_switch) {
+  client.SetOSMMode(mode_switch);
+}
+
 void TrafficManagerRemote::ResetAllTrafficLights() {
   client.ResetAllTrafficLights();
 }
@@ -206,6 +207,10 @@ void TrafficManagerRemote::HealthCheckRemoteTM() {
 
 carla::client::detail::EpisodeProxy& TrafficManagerRemote::GetEpisodeProxy() {
   return episodeProxyTM;
+}
+
+void TrafficManagerRemote::SetRandomDeviceSeed(const uint64_t seed) {
+  client.SetRandomDeviceSeed(seed);
 }
 
 } // namespace traffic_manager

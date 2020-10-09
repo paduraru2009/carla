@@ -11,6 +11,7 @@
 #include "Components/BoxComponent.h"
 
 #include <compiler/disable-ue4-macros.h>
+#include <carla/rpc/String.h>
 #include <carla/road/SignalType.h>
 #include <compiler/enable-ue4-macros.h>
 
@@ -32,7 +33,7 @@ ATrafficLightManager::ATrafficLightManager()
   }
   // Default traffic signs models
   static ConstructorHelpers::FClassFinder<AActor> StopFinder(
-      TEXT( "/Game/Carla/Static/TrafficSigns/BP_Stop" ) );
+      TEXT( "/Game/Carla/Static/TrafficSign/BP_Stop" ) );
   if (StopFinder.Succeeded())
   {
     TSubclassOf<AActor> StopSignModel = StopFinder.Class;
@@ -40,17 +41,17 @@ ATrafficLightManager::ATrafficLightManager()
     SignComponentModels.Add(carla::road::SignalType::StopSign().c_str(), UStopSignComponent::StaticClass());
   }
   static ConstructorHelpers::FClassFinder<AActor> YieldFinder(
-      TEXT( "/Game/Carla/Static/TrafficSigns/BP_Yield" ) );
+      TEXT( "/Game/Carla/Static/TrafficSign/BP_Yield" ) );
   if (YieldFinder.Succeeded())
   {
     TSubclassOf<AActor> YieldSignModel = YieldFinder.Class;
     TrafficSignsModels.Add(carla::road::SignalType::YieldSign().c_str(), YieldSignModel);
     SignComponentModels.Add(carla::road::SignalType::YieldSign().c_str(), UYieldSignComponent::StaticClass());
   }
-  LoneTrafficLightsGroupControllerId = -1;
+  TrafficLightGroupMissingId = -2;
 }
 
-void ATrafficLightManager::RegisterLightComponent(UTrafficLightComponent * TrafficLightComponent)
+void ATrafficLightManager::RegisterLightComponentFromOpenDRIVE(UTrafficLightComponent * TrafficLightComponent)
 {
   // Cast to std::string
   carla::road::SignId SignId(TCHAR_TO_UTF8(*(TrafficLightComponent->GetSignId())));
@@ -89,7 +90,7 @@ void ATrafficLightManager::RegisterLightComponent(UTrafficLightComponent * Traff
     {
       auto *NewTrafficLightController = NewObject<UTrafficLightController>();
       NewTrafficLightController->SetControllerId(ControllerId.c_str());
-      TrafficLightGroup->GetControllers().Add(NewTrafficLightController);
+      TrafficLightGroup->AddController(NewTrafficLightController);
       TrafficControllers.Add(ControllerId.c_str(), NewTrafficLightController);
     }
     TrafficLightController = TrafficControllers[ControllerId.c_str()];
@@ -98,23 +99,21 @@ void ATrafficLightManager::RegisterLightComponent(UTrafficLightComponent * Traff
   {
     auto * NewTrafficLightGroup =
           GetWorld()->SpawnActor<ATrafficLightGroup>();
-    NewTrafficLightGroup->JunctionId = LoneTrafficLightsGroupControllerId;
+    NewTrafficLightGroup->JunctionId = TrafficLightGroupMissingId;
     TrafficGroups.Add(NewTrafficLightGroup->JunctionId, NewTrafficLightGroup);
     TrafficLightGroup = NewTrafficLightGroup;
 
     auto *NewTrafficLightController = NewObject<UTrafficLightController>();
-    NewTrafficLightController->SetControllerId(FString::FromInt(LoneTrafficLightsGroupControllerId));
+    NewTrafficLightController->SetControllerId(FString::FromInt(TrafficLightControllerMissingId));
     // Set red time longer than the default 2s
     NewTrafficLightController->SetRedTime(10);
     TrafficLightGroup->GetControllers().Add(NewTrafficLightController);
     TrafficControllers.Add(NewTrafficLightController->GetControllerId(), NewTrafficLightController);
     TrafficLightController = NewTrafficLightController;
 
-    --LoneTrafficLightsGroupControllerId;
+    --TrafficLightGroupMissingId;
+    --TrafficLightControllerMissingId;
   }
-
-  TrafficLightComponent->TrafficLightGroup = TrafficLightGroup;
-  TrafficLightComponent->TrafficLightController = TrafficLightController;
 
   // Add signal to controller
   TrafficLightController->AddTrafficLight(TrafficLightComponent);
@@ -127,18 +126,48 @@ void ATrafficLightManager::RegisterLightComponent(UTrafficLightComponent * Traff
 
 }
 
+void ATrafficLightManager::RegisterLightComponentGenerated(UTrafficLightComponent * TrafficLight)
+{
+  auto* Controller = TrafficLight->GetController();
+  auto* Group = TrafficLight->GetGroup();
+  if (!Controller || !Group)
+  {
+    UE_LOG(LogCarla, Error, TEXT("Missing group or controller for traffic light"));
+    return;
+  }
+  if (TrafficLight->GetSignId() == "")
+  {
+    TrafficLight->SetSignId(FString::FromInt(TrafficLightComponentMissingId));
+    --TrafficLightComponentMissingId;
+  }
+  if (Controller->GetControllerId() == "")
+  {
+    Controller->SetControllerId(FString::FromInt(TrafficLightControllerMissingId));
+    --TrafficLightControllerMissingId;
+  }
+  if (Group->GetJunctionId() == -1)
+  {
+    Group->JunctionId = TrafficLightGroupMissingId;
+    --TrafficLightGroupMissingId;
+  }
+
+  if (!TrafficControllers.Contains(Controller->GetControllerId()))
+  {
+    TrafficControllers.Add(Controller->GetControllerId(), Controller);
+  }
+  if (!TrafficGroups.Contains(Group->GetJunctionId()))
+  {
+    TrafficGroups.Add(Group->GetJunctionId(), Group);
+  }
+  if (!TrafficSignComponents.Contains(TrafficLight->GetSignId()))
+  {
+    TrafficSignComponents.Add(TrafficLight->GetSignId(), TrafficLight);
+  }
+}
+
 const boost::optional<carla::road::Map>& ATrafficLightManager::GetMap()
 {
-  if (!Map.has_value())
-  {
-    FString MapName = GetWorld()->GetName();
-    std::string opendrive_xml = carla::rpc::FromFString(UOpenDrive::LoadXODR(MapName));
-    Map = carla::opendrive::OpenDriveParser::Load(opendrive_xml);
-    if (!Map.has_value()) {
-      UE_LOG(LogCarla, Error, TEXT("Invalid Map"));
-    }
-  }
-  return Map;
+  return UCarlaStatics::GetGameMode(GetWorld())->GetMap();
 }
 
 void ATrafficLightManager::GenerateSignalsAndTrafficLights()
@@ -180,66 +209,214 @@ void ATrafficLightManager::RemoveGeneratedSignalsAndTrafficLights()
   TrafficLightsGenerated = false;
 }
 
-// Called when the game starts
-void ATrafficLightManager::BeginPlay()
+void ATrafficLightManager::MatchTrafficLightActorsWithOpenDriveSignals()
 {
-  Super::BeginPlay();
+  TArray<AActor*> Actors;
+  UGameplayStatics::GetAllActorsOfClass(GetWorld(), ATrafficLightBase::StaticClass(), Actors);
 
-  if (TrafficLightsGenerated)
+  FString MapName = GetWorld()->GetName();
+  std::string opendrive_xml = carla::rpc::FromFString(UOpenDrive::LoadXODR(MapName));
+  auto Map = carla::opendrive::OpenDriveParser::Load(opendrive_xml);
+
+  if (!Map)
   {
-    ResetTrafficLightObjects();
+    carla::log_warning("Map not found");
+    return;
   }
-  else
+
+  TArray<ATrafficLightBase*> TrafficLights;
+  for (AActor* Actor : Actors)
+  {
+    ATrafficLightBase* TrafficLight = Cast<ATrafficLightBase>(Actor);
+    if (TrafficLight)
+    {
+      TrafficLight->GetTrafficLightComponent()->SetSignId("");
+      TrafficLights.Add(TrafficLight);
+    }
+  }
+
+  if (!TrafficLights.Num())
+  {
+    carla::log_warning("No actors in the map");
+    return;
+  }
+
+  const auto& Signals = Map->GetSignals();
+  const auto& Controllers = Map->GetControllers();
+
+  for(const auto& Signal : Signals) {
+    const auto& ODSignal = Signal.second;
+    const FTransform Transform = ODSignal->GetTransform();
+    const FVector Location = Transform.GetLocation();
+    if (ODSignal->GetName() == "")
+    {
+      continue;
+    }
+    ATrafficLightBase* ClosestActor = TrafficLights.Top();
+    float MinDistance = FVector::DistSquaredXY(TrafficLights.Top()->GetActorLocation(), Location);
+    for (ATrafficLightBase* Actor : TrafficLights)
+    {
+      float Distance = FVector::DistSquaredXY(Actor->GetActorLocation(), Location);
+      if (Distance < MinDistance)
+      {
+        MinDistance = Distance;
+        ClosestActor = Actor;
+      }
+    }
+    ATrafficLightBase* TrafficLight = ClosestActor;
+    auto* Component = TrafficLight->GetTrafficLightComponent();
+    if (Component->GetSignId() == "")
+    {
+      Component->SetSignId(carla::rpc::ToFString(ODSignal->GetSignalId()));
+    }
+    else
+    {
+      carla::log_warning("Could not find a suitable traffic light for signal", ODSignal->GetSignalId(),
+          "Closest traffic light has id", carla::rpc::FromFString(Component->GetSignId()));
+    }
+
+  }
+}
+
+void ATrafficLightManager::InitializeTrafficLights()
+{
+
+  // Should not run in empty maps
+  if (!GetMap())
+  {
+    carla::log_warning("Coud not generate traffic lights: missing map.");
+    return;
+  }
+
+  if (!TrafficLightsGenerated)
   {
     GenerateSignalsAndTrafficLights();
   }
-
 }
 
-void ATrafficLightManager::ResetTrafficLightObjects()
+bool MatchSignalAndActor(const carla::road::Signal &Signal, ATrafficSignBase* ClosestTrafficSign)
 {
-  LoneTrafficLightsGroupControllerId = -1;
-  // Update TrafficLightGroups
-  for(auto& It : TrafficGroups)
+  namespace cr = carla::road;
+  if (ClosestTrafficSign)
   {
-    ATrafficLightGroup* Group = It.Value;
-    Group->GetControllers().Empty();
-    Group->Destroy();
-  }
-  TrafficGroups.Empty();
-
-  for(auto& It : TrafficControllers)
-  {
-    UTrafficLightController* Controller = It.Value;
-    Controller->EmptyTrafficLights();
-  }
-  TrafficControllers.Empty();
-
-  for (TActorIterator<ATrafficSignBase> It(GetWorld()); It; ++It)
-  {
-    ATrafficSignBase* trafficSignBase = (*It);
-    UTrafficLightComponent* TrafficLightComponent =
-      trafficSignBase->FindComponentByClass<UTrafficLightComponent>();
-
-    if(TrafficLightComponent)
+    if ((Signal.GetType() == cr::SignalType::StopSign()) &&
+        ClosestTrafficSign->GetTrafficSignState() == ETrafficSignState::StopSign)
     {
-      RegisterLightComponent(TrafficLightComponent);
+      return true;
+    }
+    else if ((Signal.GetType() == cr::SignalType::YieldSign()) &&
+        ClosestTrafficSign->GetTrafficSignState() == ETrafficSignState::YieldSign)
+    {
+      return true;
+    }
+    else if (cr::SignalType::IsTrafficLight(Signal.GetType()))
+    {
+      if (ClosestTrafficSign->GetTrafficSignState() == ETrafficSignState::TrafficLightRed ||
+          ClosestTrafficSign->GetTrafficSignState() == ETrafficSignState::TrafficLightYellow ||
+          ClosestTrafficSign->GetTrafficSignState() == ETrafficSignState::TrafficLightGreen)
+        return true;
+    }
+    else if (Signal.GetType() == cr::SignalType::MaximumSpeed())
+    {
+      if (Signal.GetSubtype() == "30" &&
+        ClosestTrafficSign->GetTrafficSignState() == ETrafficSignState::SpeedLimit_30)
+      {
+        return true;
+      }
+      else if (Signal.GetSubtype() == "40" &&
+        ClosestTrafficSign->GetTrafficSignState() == ETrafficSignState::SpeedLimit_40)
+      {
+        return true;
+      }
+      else if (Signal.GetSubtype() == "50" &&
+        ClosestTrafficSign->GetTrafficSignState() == ETrafficSignState::SpeedLimit_50)
+      {
+        return true;
+      }
+      else if (Signal.GetSubtype() == "60" &&
+        ClosestTrafficSign->GetTrafficSignState() == ETrafficSignState::SpeedLimit_60)
+      {
+        return true;
+      }
+      else if (Signal.GetSubtype() == "90" &&
+        ClosestTrafficSign->GetTrafficSignState() == ETrafficSignState::SpeedLimit_90)
+      {
+        return true;
+      }
+      else if (Signal.GetSubtype() == "100" &&
+        ClosestTrafficSign->GetTrafficSignState() == ETrafficSignState::SpeedLimit_100)
+      {
+        return true;
+      }
+      else if (Signal.GetSubtype() == "120" &&
+        ClosestTrafficSign->GetTrafficSignState() == ETrafficSignState::SpeedLimit_120)
+      {
+        return true;
+      }
+      else if (Signal.GetSubtype() == "130" &&
+        ClosestTrafficSign->GetTrafficSignState() == ETrafficSignState::SpeedLimit_130)
+      {
+        return true;
+      }
     }
   }
+  return false;
+}
+
+template<typename T = ATrafficSignBase>
+T * GetClosestTrafficSignActor(const carla::road::Signal &Signal, UWorld* World)
+{
+  auto CarlaTransform = Signal.GetTransform();
+  FTransform UETransform(CarlaTransform);
+  FVector Location = UETransform.GetLocation();
+  // max distance to match 500cm
+  constexpr float MaxDistanceMatchSqr = 250000.0;
+  T * ClosestTrafficSign = nullptr;
+  TArray<AActor*> Actors;
+  UGameplayStatics::GetAllActorsOfClass(World, T::StaticClass(), Actors);
+  float MinDistance = MaxDistanceMatchSqr;
+  for (AActor* Actor : Actors)
+  {
+    float Dist = FVector::DistSquared(Actor->GetActorLocation(), Location);
+    T * TrafficSign = Cast<T>(Actor);
+    if (Dist < MinDistance && MatchSignalAndActor(Signal, TrafficSign))
+    {
+      ClosestTrafficSign = TrafficSign;
+      MinDistance = Dist;
+    }
+  }
+  return ClosestTrafficSign;
 }
 
 void ATrafficLightManager::SpawnTrafficLights()
 {
+  namespace cr = carla::road;
+  const auto& Signals = GetMap()->GetSignals();
   std::unordered_set<std::string> SignalsToSpawn;
   for(const auto& ControllerPair : GetMap()->GetControllers())
   {
     const auto& Controller = ControllerPair.second;
     for(const auto& SignalId : Controller->GetSignals())
     {
-      SignalsToSpawn.insert(SignalId);
+      auto& Signal = Signals.at(SignalId);
+      if (!cr::SignalType::IsTrafficLight(Signal->GetType()))
+      {
+        continue;
+      }
+      ATrafficLightBase * TrafficLight = GetClosestTrafficSignActor<ATrafficLightBase>(
+          *Signal.get(), GetWorld());
+      if (TrafficLight)
+      {
+        UTrafficLightComponent *TrafficLightComponent = TrafficLight->GetTrafficLightComponent();
+        TrafficLightComponent->SetSignId(SignalId.c_str());
+      }
+      else
+      {
+        SignalsToSpawn.insert(SignalId);
+      }
     }
   }
-  const auto& Signals = GetMap()->GetSignals();
+
   for(const auto& SignalPair : Signals)
   {
     const auto& SignalId = SignalPair.first;
@@ -249,11 +426,32 @@ void ATrafficLightManager::SpawnTrafficLights()
        carla::road::SignalType::IsTrafficLight(Signal->GetType()) &&
        !SignalsToSpawn.count(SignalId))
     {
-      SignalsToSpawn.insert(SignalId);
+      ATrafficLightBase * TrafficLight = GetClosestTrafficSignActor<ATrafficLightBase>(
+          *Signal.get(), GetWorld());
+      if (TrafficLight)
+      {
+        UTrafficLightComponent *TrafficLightComponent = TrafficLight->GetTrafficLightComponent();
+        TrafficLightComponent->SetSignId(SignalId.c_str());
+      }
+      else
+      {
+        SignalsToSpawn.insert(SignalId);
+      }
     }
   }
   for(auto &SignalId : SignalsToSpawn)
   {
+    // TODO: should this be an assert?
+    // RELEASE_ASSERT(
+    //     Signals.count(SignalId) > 0,
+    //     "Reference to inexistent signal. Possible OpenDRIVE error.");
+    if (Signals.count(SignalId) == 0)
+    {
+      UE_LOG(LogCarla, Warning,
+          TEXT("Possible OpenDRIVE error, reference to nonexistent signal id: %s"),
+          *carla::rpc::ToFString(SignalId));
+      continue;
+    }
     const auto& Signal = Signals.at(SignalId);
     auto CarlaTransform = Signal->GetTransform();
     FTransform SpawnTransform(CarlaTransform);
@@ -276,18 +474,10 @@ void ATrafficLightManager::SpawnTrafficLights()
         SpawnRotation,
         SpawnParams);
 
-    // Hack to prevent mixing ATrafficLightBase and UTrafficLightComponent logic
-    TrafficLight->SetTimeIsFrozen(true);
-
     TrafficSigns.Add(TrafficLight);
 
-    UTrafficLightComponent *TrafficLightComponent =
-        NewObject<UTrafficLightComponent>(TrafficLight);
+    UTrafficLightComponent *TrafficLightComponent = TrafficLight->GetTrafficLightComponent();
     TrafficLightComponent->SetSignId(SignalId.c_str());
-    TrafficLightComponent->RegisterComponent();
-    TrafficLightComponent->AttachToComponent(
-        TrafficLight->GetRootComponent(),
-        FAttachmentTransformRules::KeepRelativeTransform);
 
     auto ClosestWaypointToSignal =
         GetMap()->GetClosestWaypointOnRoad(CarlaTransform.location);
@@ -312,7 +502,7 @@ void ATrafficLightManager::SpawnTrafficLights()
       }
     }
 
-    RegisterLightComponent(TrafficLightComponent);
+    RegisterLightComponentFromOpenDRIVE(TrafficLightComponent);
     TrafficLightComponent->InitializeSign(GetMap().get());
   }
 }
@@ -324,11 +514,40 @@ void ATrafficLightManager::SpawnSignals()
   {
     auto &Signal = SignalPair.second;
     FString SignalType = Signal->GetType().c_str();
-    if (TrafficSignsModels.Contains(SignalType))
+
+    ATrafficSignBase * ClosestTrafficSign = GetClosestTrafficSignActor(*Signal.get(), GetWorld());
+    if (ClosestTrafficSign)
     {
+      USignComponent *SignComponent;
+      if (SignComponentModels.Contains(SignalType))
+      {
+          SignComponent =
+              NewObject<USignComponent>(
+              ClosestTrafficSign, SignComponentModels[SignalType]);
+      }
+      else
+      {
+        SignComponent =
+              NewObject<USignComponent>(
+              ClosestTrafficSign);
+      }
+      SignComponent->SetSignId(Signal->GetSignalId().c_str());
+      SignComponent->RegisterComponent();
+      SignComponent->AttachToComponent(
+          ClosestTrafficSign->GetRootComponent(),
+          FAttachmentTransformRules::KeepRelativeTransform);
+      TrafficSignComponents.Add(SignComponent->GetSignId(), SignComponent);
+      TrafficSigns.Add(ClosestTrafficSign);
+    }
+    else if (TrafficSignsModels.Contains(SignalType))
+    {
+      // We do not spawn stops painted in the ground
+      if (Signal->GetName() == "Stencil_STOP")
+      {
+        continue;
+      }
       auto CarlaTransform = Signal->GetTransform();
       FTransform SpawnTransform(CarlaTransform);
-
       FVector SpawnLocation = SpawnTransform.GetLocation();
       FRotator SpawnRotation(SpawnTransform.GetRotation());
       SpawnRotation.Yaw += 90;
@@ -381,6 +600,32 @@ void ATrafficLightManager::SpawnSignals()
       TrafficSigns.Add(TrafficSign);
     }
   }
+}
+
+void ATrafficLightManager::SetFrozen(bool InFrozen)
+{
+  bTrafficLightsFrozen = InFrozen;
+  if (bTrafficLightsFrozen)
+  {
+    for (auto& TrafficGroupPair : TrafficGroups)
+    {
+      auto* TrafficGroup = TrafficGroupPair.Value;
+      TrafficGroup->SetFrozenGroup(true);
+    }
+  }
+  else
+  {
+    for (auto& TrafficGroupPair : TrafficGroups)
+    {
+      auto* TrafficGroup = TrafficGroupPair.Value;
+      TrafficGroup->SetFrozenGroup(false);
+    }
+  }
+}
+
+bool ATrafficLightManager::GetFrozen()
+{
+  return bTrafficLightsFrozen;
 }
 
 ATrafficLightGroup* ATrafficLightManager::GetTrafficGroup(carla::road::JuncId JunctionId)

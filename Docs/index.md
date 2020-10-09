@@ -67,7 +67,7 @@ CARLA forum</a>
         — Register the events in a simulation and play it again.  
     [__Rendering options__](adv_rendering_options.md)
         — From quality settings to no-render or off-screen modes.  
-    [__RSS sensor__](adv_rss.md)
+    [__RSS__](adv_rss.md)
         — An implementation of RSS in the CARLA client library.  
     [__SUMO co-simulation__](adv_sumo.md)
         — Run a synchronous simulation between CARLA and SUMO.  
@@ -91,6 +91,11 @@ CARLA forum</a>
         — Detailed explanation of the recorder file format.  
     [__Sensors reference__](ref_sensors.md)
         — Everything about sensors and the data they retrieve.  
+
+## Plugins
+  <p style="padding-left:30px;line-height:1.8">
+    [__carlaviz — web visualizer__](plugins_carlaviz.md)
+        — Plugin that listens the simulation and shows the scene and some simulation data in a web browser.  
 
 ## ROS bridge
   <p style="padding-left:30px;line-height:1.8">
@@ -126,8 +131,8 @@ CARLA forum</a>
         — Generate and handle standalone packages for assets.  
     [__Map customization__](tuto_A_map_customization.md)
         — Edit an existing map.  
-    [__Use Epic's Automotive materials__](tuto_A_epic_automotive_materials.md)
-        — Apply Epic's set of Automotive materials to vehicles.  
+    [__Material customization__](tuto_A_material_customization.md)
+        — Edit vehicle and building materials.  
     [__Vehicle modelling__](tuto_A_vehicle_modelling.md)
         — Create a new vehicle for CARLA.  
     </p>
@@ -138,8 +143,12 @@ CARLA forum</a>
         — Add new content to CARLA.  
     [__Create a sensor__](tuto_D_create_sensor.md)
         — Develop a new sensor to be used in CARLA.  
+    [__Customize vehicle suspension__](tuto_D_customize_vehicle_suspension.md)
+        — Modify the suspension system of a vehicle.  
     [__Make a release__](tuto_D_make_release.md)
         — For developers who want to publish a release.  
+    [__Generate detailed colliders__](tuto_D_generate_colliders.md)
+        — Create detailed colliders for vehicles.  
     [__Generate pedestrian navigation__](tuto_D_generate_pedestrian_navigation.md)
         — Obtain the information needed for walkers to move around.  
     </p>

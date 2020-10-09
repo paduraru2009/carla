@@ -295,7 +295,7 @@ public:
     return Recorder->GetReplayer();
   }
 
-  std::string StartRecorder(std::string name);
+  std::string StartRecorder(std::string name, bool AdditionalData);
 
 private:
 

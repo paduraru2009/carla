@@ -21,7 +21,7 @@ Traffic lights, stops and yields will be generated on the fly. Pedestrians will 
 !!! Important
     It is especially important to double check the OpenDRIVE file. Any issues in it will propagate when running the simulation.
 
-![opendrive_standalone](img/opendrive_standalone.png)
+![opendrive_standalone](img/opendrive_standalone.jpg)
 
 ---
 ## Run a standalone map
@@ -48,14 +48,14 @@ python3 config.py -x opendrive/TownBig.xodr
 ```
 
 !!! Important
-    __[carla.OpendriveGenerationParameters](python_api.md#carla.OpendriveGenerationParameters)__ uses __content of the OpenDRIVE file parsed as string__. On the contrary, __`config.py`__ script needs __the path to the `.xodr` file__.
+    __[client.generate_opendrive_world()](python_api.md#carla.Client.generate_opendrive_world)__ uses __content of the OpenDRIVE file parsed as string__. On the contrary, __`config.py`__ script needs __the path to the `.xodr` file__.
 
 ---
 ## Mesh generation
 
 The generation of the mesh is the key element of this mode. The feature can only be successful if the resulting mesh is smooth and fits its definition perfectly. For that reason, this step is constantly being improved. In the last iterations, junctions have been polished to avoid inaccuracies that occur, especially where uneven lanes joined.  
 
-![opendrive_meshissue](img/opendrive_meshissue.png)
+![opendrive_meshissue](img/opendrive_meshissue.jpg)
 <div style="text-align: right"><i>When generating junction meshes, higher lanes tend to block the ones below them. <br>The parameter <code>smooth_junctions</code> prevents this kind of issue.</i></div>
 
 Besides that, instead of creating the whole map as a unique mesh, different portions are created. By dividing the mesh, the simulator can avoid rendering portions that are not visible, and save up costs. Working smaller also allows to generate huge maps and contain issues that may occur on a small portion of the mesh.

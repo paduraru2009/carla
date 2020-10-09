@@ -26,6 +26,10 @@ namespace client {
     return _episode.Lock()->GetBlueprintLibrary();
   }
 
+  rpc::VehicleLightStateList World::GetVehiclesLightStates() const {
+    return _episode.Lock()->GetVehiclesLightStates();
+  }
+
   boost::optional<geom::Location> World::GetRandomLocationFromNavigation() const {
     return _episode.Lock()->GetRandomLocationFromNavigation();
   }
@@ -144,6 +148,22 @@ namespace client {
       }
     }
     return nullptr;
+  }
+
+  void World::ResetAllTrafficLights() {
+    _episode.Lock()->ResetAllTrafficLights();
+  }
+
+  SharedPtr<LightManager> World::GetLightManager() const {
+    return _episode.Lock()->GetLightManager();
+  }
+
+  void World::FreezeAllTrafficLights(bool frozen) {
+    _episode.Lock()->FreezeAllTrafficLights(frozen);
+  }
+
+  std::vector<geom::BoundingBox> World::GetLevelBBs(uint8_t queried_tag) const {
+    return _episode.Lock()->GetLevelBBs(queried_tag);
   }
 
 } // namespace client

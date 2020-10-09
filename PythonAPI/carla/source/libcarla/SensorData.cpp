@@ -16,10 +16,12 @@
 #include <carla/sensor/data/Image.h>
 #include <carla/sensor/data/LaneInvasionEvent.h>
 #include <carla/sensor/data/LidarMeasurement.h>
+#include <carla/sensor/data/SemanticLidarMeasurement.h>
 #include <carla/sensor/data/GnssMeasurement.h>
 #include <carla/sensor/data/RadarMeasurement.h>
+#include <carla/sensor/data/DVSEventArray.h>
 
-#include <carla/sensor/s11n/RadarData.h>
+#include <carla/sensor/data/RadarData.h>
 
 #include <boost/python/suite/indexing/vector_indexing_suite.hpp>
 
@@ -40,6 +42,14 @@ namespace data {
 
   std::ostream &operator<<(std::ostream &out, const LidarMeasurement &meas) {
     out << "LidarMeasurement(frame=" << std::to_string(meas.GetFrame())
+        << ", timestamp=" << std::to_string(meas.GetTimestamp())
+        << ", number_of_points=" << std::to_string(meas.size())
+        << ')';
+    return out;
+  }
+
+  std::ostream &operator<<(std::ostream &out, const SemanticLidarMeasurement &meas) {
+    out << "SemanticLidarMeasurement(frame=" << std::to_string(meas.GetFrame())
         << ", timestamp=" << std::to_string(meas.GetTimestamp())
         << ", number_of_points=" << std::to_string(meas.size())
         << ')';
@@ -97,15 +107,49 @@ namespace data {
     return out;
   }
 
-} // namespace data
+  std::ostream &operator<<(std::ostream &out, const DVSEvent &event) {
+    out << "Event(x=" << std::to_string(event.x)
+        << ", y=" << std::to_string(event.y)
+        << ", t=" << std::to_string(event.t)
+        << ", pol=" << std::to_string(event.pol) << ')';
+    return out;
+  }
 
-namespace s11n {
+  std::ostream &operator<<(std::ostream &out, const DVSEventArray &events) {
+    out << "EventArray(frame=" << std::to_string(events.GetFrame())
+        << ", timestamp=" << std::to_string(events.GetTimestamp())
+        << ", dimensions=" << std::to_string(events.GetWidth()) << 'x' << std::to_string(events.GetHeight())
+        << ", number_of_events=" << std::to_string(events.size())
+        << ')';
+    return out;
+  }
+
 
   std::ostream &operator<<(std::ostream &out, const RadarDetection &det) {
     out << "RadarDetection(velocity=" << std::to_string(det.velocity)
         << ", azimuth=" << std::to_string(det.azimuth)
         << ", altitude=" << std::to_string(det.altitude)
         << ", depth=" << std::to_string(det.depth)
+        << ')';
+    return out;
+  }
+
+  std::ostream &operator<<(std::ostream &out, const LidarDetection &det) {
+    out << "LidarDetection(x=" << std::to_string(det.point.x)
+        << ", y=" << std::to_string(det.point.y)
+        << ", z=" << std::to_string(det.point.z)
+        << ", intensity=" << std::to_string(det.intensity)
+        << ')';
+    return out;
+  }
+
+  std::ostream &operator<<(std::ostream &out, const SemanticLidarDetection &det) {
+    out << "SemanticLidarDetection(x=" << std::to_string(det.point.x)
+        << ", y=" << std::to_string(det.point.y)
+        << ", z=" << std::to_string(det.point.z)
+        << ", cos_inc_angle=" << std::to_string(det.cos_inc_angle)
+        << ", object_idx=" << std::to_string(det.object_idx)
+        << ", object_tag=" << std::to_string(det.object_tag)
         << ')';
     return out;
   }
@@ -236,11 +280,28 @@ void export_sensor_data() {
     .def("save_to_disk", &SavePointCloudToDisk<csd::LidarMeasurement>, (arg("path")))
     .def("__len__", &csd::LidarMeasurement::size)
     .def("__iter__", iterator<csd::LidarMeasurement>())
-    .def("__getitem__", +[](const csd::LidarMeasurement &self, size_t pos) -> cr::Location {
+    .def("__getitem__", +[](const csd::LidarMeasurement &self, size_t pos) -> csd::LidarDetection {
       return self.at(pos);
     })
-    .def("__setitem__", +[](csd::LidarMeasurement &self, size_t pos, const cr::Location &point) {
-      self.at(pos) = point;
+    .def("__setitem__", +[](csd::LidarMeasurement &self, size_t pos, const csd::LidarDetection &detection) {
+      self.at(pos) = detection;
+    })
+    .def(self_ns::str(self_ns::self))
+  ;
+
+  class_<csd::SemanticLidarMeasurement, bases<cs::SensorData>, boost::noncopyable, boost::shared_ptr<csd::SemanticLidarMeasurement>>("SemanticLidarMeasurement", no_init)
+    .add_property("horizontal_angle", &csd::SemanticLidarMeasurement::GetHorizontalAngle)
+    .add_property("channels", &csd::SemanticLidarMeasurement::GetChannelCount)
+    .add_property("raw_data", &GetRawDataAsBuffer<csd::SemanticLidarMeasurement>)
+    .def("get_point_count", &csd::SemanticLidarMeasurement::GetPointCount, (arg("channel")))
+    .def("save_to_disk", &SavePointCloudToDisk<csd::SemanticLidarMeasurement>, (arg("path")))
+    .def("__len__", &csd::SemanticLidarMeasurement::size)
+    .def("__iter__", iterator<csd::SemanticLidarMeasurement>())
+    .def("__getitem__", +[](const csd::SemanticLidarMeasurement &self, size_t pos) -> csd::SemanticLidarDetection {
+      return self.at(pos);
+    })
+    .def("__setitem__", +[](csd::SemanticLidarMeasurement &self, size_t pos, const csd::SemanticLidarDetection &detection) {
+      self.at(pos) = detection;
     })
     .def(self_ns::str(self_ns::self))
   ;
@@ -284,20 +345,64 @@ void export_sensor_data() {
     .def("get_detection_count", &csd::RadarMeasurement::GetDetectionAmount)
     .def("__len__", &csd::RadarMeasurement::size)
     .def("__iter__", iterator<csd::RadarMeasurement>())
-    .def("__getitem__", +[](const csd::RadarMeasurement &self, size_t pos) -> css::RadarDetection {
+    .def("__getitem__", +[](const csd::RadarMeasurement &self, size_t pos) -> csd::RadarDetection {
       return self.at(pos);
     })
-    .def("__setitem__", +[](csd::RadarMeasurement &self, size_t pos, const css::RadarDetection &detection) {
+    .def("__setitem__", +[](csd::RadarMeasurement &self, size_t pos, const csd::RadarDetection &detection) {
       self.at(pos) = detection;
     })
     .def(self_ns::str(self_ns::self))
   ;
 
-  class_<css::RadarDetection>("RadarDetection")
-    .def_readwrite("velocity", &css::RadarDetection::velocity)
-    .def_readwrite("azimuth", &css::RadarDetection::azimuth)
-    .def_readwrite("altitude", &css::RadarDetection::altitude)
-    .def_readwrite("depth", &css::RadarDetection::depth)
+  class_<csd::RadarDetection>("RadarDetection")
+    .def_readwrite("velocity", &csd::RadarDetection::velocity)
+    .def_readwrite("azimuth", &csd::RadarDetection::azimuth)
+    .def_readwrite("altitude", &csd::RadarDetection::altitude)
+    .def_readwrite("depth", &csd::RadarDetection::depth)
+    .def(self_ns::str(self_ns::self))
+  ;
+
+  class_<csd::LidarDetection>("LidarDetection")
+    .def_readwrite("point", &csd::LidarDetection::point)
+    .def_readwrite("intensity", &csd::LidarDetection::intensity)
+    .def(self_ns::str(self_ns::self))
+  ;
+
+  class_<csd::SemanticLidarDetection>("SemanticLidarDetection")
+    .def_readwrite("point", &csd::SemanticLidarDetection::point)
+    .def_readwrite("cos_inc_angle", &csd::SemanticLidarDetection::cos_inc_angle)
+    .def_readwrite("object_idx", &csd::SemanticLidarDetection::object_idx)
+    .def_readwrite("object_tag", &csd::SemanticLidarDetection::object_tag)
+    .def(self_ns::str(self_ns::self))
+  ;
+
+  class_<csd::DVSEvent>("DVSEvent")
+    .add_property("x", &csd::DVSEvent::x)
+    .add_property("y", &csd::DVSEvent::y)
+    .add_property("t", &csd::DVSEvent::t)
+    .add_property("pol", &csd::DVSEvent::pol)
+    .def(self_ns::str(self_ns::self))
+  ;
+
+  class_<csd::DVSEventArray, bases<cs::SensorData>, boost::noncopyable, boost::shared_ptr<csd::DVSEventArray>>("DVSEventArray", no_init)
+    .add_property("width", &csd::DVSEventArray::GetWidth)
+    .add_property("height", &csd::DVSEventArray::GetHeight)
+    .add_property("fov", &csd::DVSEventArray::GetFOVAngle)
+    .add_property("raw_data", &GetRawDataAsBuffer<csd::DVSEventArray>)
+    .def("__len__", &csd::DVSEventArray::size)
+    .def("__iter__", iterator<csd::DVSEventArray>())
+    .def("__getitem__", +[](const csd::DVSEventArray &self, size_t pos) -> csd::DVSEvent {
+      return self.at(pos);
+    })
+    .def("__setitem__", +[](csd::DVSEventArray &self, size_t pos, csd::DVSEvent event) {
+      self.at(pos) = event;
+    })
+    .def("to_image", CALL_RETURNING_LIST(csd::DVSEventArray, ToImage))
+    .def("to_array", CALL_RETURNING_LIST(csd::DVSEventArray, ToArray))
+    .def("to_array_x", CALL_RETURNING_LIST(csd::DVSEventArray, ToArrayX))
+    .def("to_array_y", CALL_RETURNING_LIST(csd::DVSEventArray, ToArrayY))
+    .def("to_array_t", CALL_RETURNING_LIST(csd::DVSEventArray, ToArrayT))
+    .def("to_array_pol", CALL_RETURNING_LIST(csd::DVSEventArray, ToArrayPol))
     .def(self_ns::str(self_ns::self))
   ;
 }

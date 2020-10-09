@@ -10,6 +10,7 @@
 #include "carla/Time.h"
 #include "carla/client/DebugHelper.h"
 #include "carla/client/Landmark.h"
+#include "carla/client/LightManager.h"
 #include "carla/client/Timestamp.h"
 #include "carla/client/WorldSnapshot.h"
 #include "carla/client/detail/EpisodeProxy.h"
@@ -19,6 +20,7 @@
 #include "carla/rpc/EpisodeSettings.h"
 #include "carla/rpc/VehiclePhysicsControl.h"
 #include "carla/rpc/WeatherParameters.h"
+#include "carla/rpc/VehicleLightStateList.h"
 
 #include <boost/optional.hpp>
 
@@ -57,6 +59,10 @@ namespace client {
     /// Return the list of blueprints available in this world. This blueprints
     /// can be used to spawning actor into the world.
     SharedPtr<BlueprintLibrary> GetBlueprintLibrary() const;
+
+    /// Returns a list of pairs where the firts element is the vehicle ID
+    /// and the second one is the light state
+    rpc::VehicleLightStateList GetVehiclesLightStates() const;
 
     /// Get a random location from the pedestrians navigation mesh
     boost::optional<geom::Location> GetRandomLocationFromNavigation() const;
@@ -132,6 +138,10 @@ namespace client {
 
     SharedPtr<Actor> GetTrafficLight(const Landmark& landmark) const;
 
+    void ResetAllTrafficLights();
+
+    SharedPtr<LightManager> GetLightManager() const;
+
     DebugHelper MakeDebugHelper() const {
       return DebugHelper{_episode};
     }
@@ -139,6 +149,11 @@ namespace client {
     detail::EpisodeProxy GetEpisode() const {
       return _episode;
     };
+
+    void FreezeAllTrafficLights(bool frozen);
+
+    /// Returns all the BBs of all the elements of the level
+    std::vector<geom::BoundingBox> GetLevelBBs(uint8_t queried_tag) const;
 
   private:
 

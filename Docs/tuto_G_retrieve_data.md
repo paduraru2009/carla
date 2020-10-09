@@ -4,39 +4,39 @@ Learning an efficient way to retrieve simulation data is essential in CARLA. Thi
 
 First, the simulation is initialized with custom settings and traffic. An ego vehicle is set to roam around the city, optionally with some basic sensors. The simulation is recorded, so that later it can be queried to find the highlights. After that, the original simulation is played back, and exploited to the limit. New sensors can be added to retrieve consistent data. The weather conditions can be changed. The recorder can even be used to test specific scenarios with different outputs.  
 
-* [__Overview__](#overview)  
-* [__Set the simulation__](#set-the-simulation)  
-	* [Map setting](#map-setting)  
-	* [Weather setting](#weather-setting)  
-* [__Set traffic__](#set-traffic)  
-	* [CARLA traffic and pedestrians](#carla-traffic-and-pedestrians)  
-	* [SUMO co-simulation traffic](#sumo-co-simulation-traffic)  
-* [__Set the ego vehicle__](#set-the-ego-vehicle)  
-	* [Spawn the ego vehicle](#spawn-the-ego-vehicle)  
-	* [Place the spectator](#place-the-spectator)  
-* [__Set basic sensors__](#set-basic-sensors)  
-	* [RGB camera](#rgb-camera)  
-	* [Detectors](#detectors)  
-	* [Other sensors](#other-sensors)  
-* [__Set advanced sensors__](#set-advanced-sensors)  
-	* [Depth camera](#depth-camera)  
-	* [Semantic segmentation camera](#semantic-segmentation-camera)  
-	* [LIDAR raycast sensor](#lidar-raycast-sensor)  
-	* [Radar sensor](#radar-sensor)  
-* [__No-rendering-mode__](#no-rendering-mode)  
-	* [Simulate at a fast pace](#simulate-at-a-fast-pace)  
-	* [Manual control without rendering](#manual-control-without-rendering)  
-* [__Record and retrieve data__](#record-and-retrieve-data)  
-	* [Start recording](#start-recording)  
-	* [Capture and record](#capture-and-record)  
-	* [Stop recording](#stop-recording)  
-* [__Exploit the recording__](#exploit-the-recording)  
-	* [Query the events](#query-the-events)  
-	* [Choose a fragment](#choose-a-fragment)  
-	* [Retrieve more data](#retrieve-more-data)  
-	* [Change the weather](#change-the-weather)  
-	* [Try new outcomes](#try-new-outcomes)  
-* [__Tutorial scripts__](#tutorial-scripts)  
+*   [__Overview__](#overview)  
+*   [__Set the simulation__](#set-the-simulation)  
+	*   [Map setting](#map-setting)  
+	*   [Weather setting](#weather-setting)  
+*   [__Set traffic__](#set-traffic)  
+	*   [CARLA traffic and pedestrians](#carla-traffic-and-pedestrians)  
+	*   [SUMO co-simulation traffic](#sumo-co-simulation-traffic)  
+*   [__Set the ego vehicle__](#set-the-ego-vehicle)  
+	*   [Spawn the ego vehicle](#spawn-the-ego-vehicle)  
+	*   [Place the spectator](#place-the-spectator)  
+*   [__Set basic sensors__](#set-basic-sensors)  
+	*   [RGB camera](#rgb-camera)  
+	*   [Detectors](#detectors)  
+	*   [Other sensors](#other-sensors)  
+*   [__Set advanced sensors__](#set-advanced-sensors)  
+	*   [Depth camera](#depth-camera)  
+	*   [Semantic segmentation camera](#semantic-segmentation-camera)  
+	*   [LIDAR raycast sensor](#lidar-raycast-sensor)  
+	*   [Radar sensor](#radar-sensor)  
+*   [__No-rendering-mode__](#no-rendering-mode)  
+	*   [Simulate at a fast pace](#simulate-at-a-fast-pace)  
+	*   [Manual control without rendering](#manual-control-without-rendering)  
+*   [__Record and retrieve data__](#record-and-retrieve-data)  
+	*   [Start recording](#start-recording)  
+	*   [Capture and record](#capture-and-record)  
+	*   [Stop recording](#stop-recording)  
+*   [__Exploit the recording__](#exploit-the-recording)  
+	*   [Query the events](#query-the-events)  
+	*   [Choose a fragment](#choose-a-fragment)  
+	*   [Retrieve more data](#retrieve-more-data)  
+	*   [Change the weather](#change-the-weather)  
+	*   [Try new outcomes](#try-new-outcomes)  
+*   [__Tutorial scripts__](#tutorial-scripts)  
 
 ---
 ## Overview
@@ -87,7 +87,7 @@ Open a new terminal. Change the map using the __config.py__ script.
 
 ```
 cd /opt/carla/PythonAPI/utils
-./config.py --map Town01
+python3 config.py --map Town01
 ```
 This script can enable different settings. Some of them will be mentioned during the tutorial, others will not. Hereunder there is a brief summary.  
 
@@ -121,7 +121,7 @@ This script can enable different settings. Some of them will be mentioned during
 </details>
 <br>
 
-![tuto_map](img/tuto_map.png)
+![tuto_map](img/tuto_map.jpg)
 <div style="text-align: right"><i>Aerial view of Town07</i></div>
 
 ### Weather setting
@@ -133,18 +133,18 @@ Each town is loaded with a specific weather that fits it, however this can be se
 ```sh
 cd /opt/carla/PythonAPI/examples
 
-python dynamic_weather.py --speed 1.0
+python3 dynamic_weather.py --speed 1.0
 ```
 
-* __To set custom conditions__. Use the script __weather.py__. There are quite a lot of possible settings. Take a look at the optional arguments, and the documentation for [carla.WeatherParameters](python_api.md#carla.WeatherParameters).
+* __To set custom conditions__. Use the script __environment.py__. There are quite a lot of possible settings. Take a look at the optional arguments, and the documentation for [carla.WeatherParameters](python_api.md#carla.WeatherParameters).
 
 ```sh
 cd /opt/carla/PythonAPI/util
-python weather.py --clouds 100 --rain 80 --wetness 100 --puddles 60 --wind 80 --fog 50
+python3 environment.py --clouds 100 --rain 80 --wetness 100 --puddles 60 --wind 80 --fog 50
 
 ```
 <details>
-<summary> Optional arguments in <b>weather.py</b> </summary>
+<summary> Optional arguments in <b>environment.py</b> </summary>
 
 ```sh
   -h, --help            show this help message and exit
@@ -166,7 +166,7 @@ python weather.py --clouds 100 --rain 80 --wetness 100 --puddles 60 --wind 80 --
 </details>
 <br>
 
-![tuto_weather](img/tuto_weather.png)
+![tuto_weather](img/tuto_weather.jpg)
 <div style="text-align: right"><i>Weather changes applied</i></div>
 
 ---
@@ -182,7 +182,7 @@ Open a new terminal, and run __spawn_npc.py__ to spawn vehicles and walkers. Let
 
 ```sh
 cd /opt/carla/PythonAPI/examples
-python spawn_npc.py -n 50 -w 50 --safe
+python3 spawn_npc.py -n 50 -w 50 --safe
 ```
 <details>
 <summary> Optional arguments in <b>spawn_npc.py</b> </summary>
@@ -198,19 +198,19 @@ python spawn_npc.py -n 50 -w 50 --safe
   --safe                avoid spawning vehicles prone to accidents
   --filterv PATTERN     vehicles filter (default: "vehicle.*")
   --filterw PATTERN     pedestrians filter (default: "walker.pedestrian.*")
-  -tm_p P, --tm_port P  port to communicate with TM (default: 8000)
+  -tm_p P, --tm-port P  port to communicate with TM (default: 8000)
   --sync                Synchronous mode execution
 ```
 </details>
 <br>
-![tuto_spawning](img/tuto_spawning.png)
+![tuto_spawning](img/tuto_spawning.jpg)
 <div style="text-align: right"><i>Vehicles spawned to simulate traffic.</i></div>
 
 ### SUMO co-simulation traffic
 
-CARLA can run a co-simulation with SUMO. This allows for creating traffic in SUMO that will be propagated to CARLA. This co-simulation is bidirectional. Spawning vehicles in CARLA will do so in SUMO.  
+CARLA can run a co-simulation with SUMO. This allows for creating traffic in SUMO that will be propagated to CARLA. This co-simulation is bidirectional. Spawning vehicles in CARLA will do so in SUMO. Specific docs on this feature can be found [here](adv_sumo.md).  
 
-Right now this feature is available for CARLA 0.9.8 and later, in __Town01__, __Town04__, and __Town05__. The first one is the most stable.  
+This feature is available for CARLA 0.9.8 and later, in __Town01__, __Town04__, and __Town05__. The first one is the most stable.  
 
 !!! Note
     The co-simulation will enable synchronous mode in CARLA. Read the [documentation](adv_synchrony_timestep.md) to find out more about this. 
@@ -228,7 +228,7 @@ echo "export SUMO_HOME=/usr/share/sumo" >> ~/.bashrc && source ~/.bashrc
 * With the CARLA server on, run the [SUMO-CARLA synchrony script](https://github.com/carla-simulator/carla/blob/master/Co-Simulation/Sumo/run_synchronization.py). 
 ```sh
 cd ~/carla/Co-Simulation/Sumo
-python run_synchronization.py -c examples/Town01.sumocfg
+python3 run_synchronization.py examples/Town01.sumocfg --sumo-gui
 ```
 * A SUMO window should have opened. __Press Play__ in order to start traffic in both simulations. 
 ```
@@ -237,7 +237,7 @@ python run_synchronization.py -c examples/Town01.sumocfg
 
 The traffic generated by this script is an example created by the CARLA team. By default it spawns the same vehicles following the same routes. These can be changed by the user in SUMO. 
 
-![tuto_sumo](img/tuto_sumo.png)
+![tuto_sumo](img/tuto_sumo.jpg)
 <div style="text-align: right"><i>SUMO and CARLA co-simulating traffic.</i></div>
 
 !!! Warning
@@ -327,10 +327,10 @@ cam_bp.set_attribute("fov",str(105))
 cam_location = carla.Location(2,0,1)
 cam_rotation = carla.Rotation(0,180,0)
 cam_transform = carla.Transform(cam_location,cam_rotation)
-ego_cam = world.spawn_actor(cam_bp,cam_transform,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.SpringArm)
-ego_cam.listen(lambda image: image.save_to_disk('tutorial/output/%.6d.png' % image.frame))
+ego_cam = world.spawn_actor(cam_bp,cam_transform,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.Rigid)
+ego_cam.listen(lambda image: image.save_to_disk('tutorial/output/%.6d.jpg' % image.frame))
 ```
-![tuto_rgb](img/tuto_rgb.png)
+![tuto_rgb](img/tuto_rgb.jpg)
 <div style="text-align: right"><i>RGB camera output</i></div>
 
 ### Detectors
@@ -392,7 +392,7 @@ def obs_callback(obs):
     print("Obstacle detected:\n"+str(obs)+'\n')
 ego_obs.listen(lambda obs: obs_callback(obs))
 ```
-![tuto_detectors](img/tuto_detectors.png)
+![tuto_detectors](img/tuto_detectors.jpg)
 <div style="text-align: right"><i>Output for detector sensors</i></div>
 
 ### Other sensors
@@ -438,7 +438,7 @@ def imu_callback(imu):
 ego_imu.listen(lambda imu: imu_callback(imu))
 ```
 
-![tuto_other](img/tuto_other.png)
+![tuto_other](img/tuto_other.jpg)
 <div style="text-align: right"><i>GNSS and IMU sensors output</i></div>
 
 ---
@@ -466,12 +466,12 @@ depth_bp = world.get_blueprint_library().find('sensor.camera.depth')
 depth_location = carla.Location(2,0,1)
 depth_rotation = carla.Rotation(0,180,0)
 depth_transform = carla.Transform(depth_location,depth_rotation)
-depth_cam = world.spawn_actor(depth_bp,depth_transform,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.SpringArm)
+depth_cam = world.spawn_actor(depth_bp,depth_transform,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.Rigid)
 # This time, a color converter is applied to the image, to get the semantic segmentation view
-depth_cam.listen(lambda image: image.save_to_disk('tutorial/new_depth_output/%.6d.png' % image.frame,carla.ColorConverter.LogarithmicDepth))
+depth_cam.listen(lambda image: image.save_to_disk('tutorial/new_depth_output/%.6d.jpg' % image.frame,carla.ColorConverter.LogarithmicDepth))
 ```
 
-![tuto_depths](img/tuto_depths.png)
+![tuto_depths](img/tuto_depths.jpg)
 <div style="text-align: right"><i>Depth camera output. Simple conversion on the left, logarithmic on the right.</i></div>
 
 ### Semantic segmentation camera
@@ -494,12 +494,12 @@ sem_bp.set_attribute("fov",str(105))
 sem_location = carla.Location(2,0,1)
 sem_rotation = carla.Rotation(0,180,0)
 sem_transform = carla.Transform(sem_location,sem_rotation)
-sem_cam = world.spawn_actor(sem_bp,sem_transform,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.SpringArm)
+sem_cam = world.spawn_actor(sem_bp,sem_transform,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.Rigid)
 # This time, a color converter is applied to the image, to get the semantic segmentation view
-sem_cam.listen(lambda image: image.save_to_disk('tutorial/new_sem_output/%.6d.png' % image.frame,carla.ColorConverter.CityScapesPalette))
+sem_cam.listen(lambda image: image.save_to_disk('tutorial/new_sem_output/%.6d.jpg' % image.frame,carla.ColorConverter.CityScapesPalette))
 ```
 
-![tuto_sem](img/tuto_sem.png)
+![tuto_sem](img/tuto_sem.jpg)
 <div style="text-align: right"><i>Semantic segmentation camera output</i></div>
 
 ### LIDAR raycast sensor
@@ -532,7 +532,7 @@ lidar_bp.set_attribute('range',str(20))
 lidar_location = carla.Location(0,0,2)
 lidar_rotation = carla.Rotation(0,0,0)
 lidar_transform = carla.Transform(lidar_location,lidar_rotation)
-lidar_sen = world.spawn_actor(lidar_bp,lidar_transform,attach_to=ego_vehicle,attachment_type=carla.AttachmentType.SpringArm)
+lidar_sen = world.spawn_actor(lidar_bp,lidar_transform,attach_to=ego_vehicle)
 lidar_sen.listen(lambda point_cloud: point_cloud.save_to_disk('tutorial/new_lidar_output/%.6d.ply' % point_cloud.frame))
 ```
 
@@ -549,7 +549,7 @@ meshlab
 ```
 __3.__ Open one of the _.ply_ files. `File > Import mesh...` 
 
-![tuto_lidar](img/tuto_lidar.png)
+![tuto_lidar](img/tuto_lidar.jpg)
 <div style="text-align: right"><i>LIDAR output after being processed in Meshlab.</i></div>
 
 ### Radar sensor
@@ -607,7 +607,6 @@ def rad_callback(radar_data):
         r = int(clamp(0.0, 1.0, 1.0 - norm_velocity) * 255.0)
         g = int(clamp(0.0, 1.0, 1.0 - abs(norm_velocity)) * 255.0)
         b = int(abs(clamp(- 1.0, 0.0, - 1.0 - norm_velocity)) * 255.0)
-        print("I got here")
         world.debug.draw_point(
             radar_data.transform.location + fw_vec,
             size=0.075,
@@ -617,7 +616,7 @@ def rad_callback(radar_data):
 rad_ego.listen(lambda radar_data: rad_callback(radar_data))
 ```
 
-![tuto_radar](img/tuto_radar.png)
+![tuto_radar](img/tuto_radar.jpg)
 <div style="text-align: right"><i>Radar output. The vehicle is stopped at a traffic light, so the static elements in front of it appear in white.</i></div>
 
 ---
@@ -633,7 +632,7 @@ The same `config.py` used to [set the map](#map-setting) can disable rendering, 
 
 ```
 cd /opt/carla/PythonAPI/utils
-./config.py --no-rendering --delta-seconds 0.05 # Never greater than 0.1s
+python3 config.py --no-rendering --delta-seconds 0.05 # Never greater than 0.1s
 ```
 
 !!! Warning
@@ -645,12 +644,12 @@ The script `PythonAPI/examples/no_rendering_mode.py` provides an overview of the
 
 ```
 cd /opt/carla/PythonAPI/examples
-python manual_control.py
+python3 manual_control.py
 ```
 
 ```
 cd /opt/carla/PythonAPI/examples
-python no_rendering_mode.py --no-rendering
+python3 no_rendering_mode.py --no-rendering
 ```
 
 <details>
@@ -672,7 +671,7 @@ python no_rendering_mode.py --no-rendering
 </details>
 <br>
 
-![tuto_no_rendering](img/tuto_no_rendering.png)
+![tuto_no_rendering](img/tuto_no_rendering.jpg)
 <div style="text-align: right"><i>no_rendering_mode.py working in Town07</i></div>
 
 !!! Note
@@ -713,7 +712,7 @@ while True:
 
 ```
 cd /opt/carla/PythonAPI/examples
-python manual_control.py
+python3 manual_control.py
 ```
 
 !!! Note
@@ -743,7 +742,7 @@ It is time to run a new simulation.
 To reenact the simulation, [choose a fragment](#choose-a-fragment) and run the script containing the code for the playback.  
 
 ```sh
-python tuto_replay.py
+python3 tuto_replay.py
 ```
 
 ### Query the events
@@ -765,13 +764,13 @@ print(client.show_recorder_collisions("~/tutorial/recorder/recording01.log",'v',
 !!! Note
     The recorder does not need to be on, in order to do the queries.
 
-![tuto_query_frames](img/tuto_query_frames.png)
+![tuto_query_frames](img/tuto_query_frames.jpg)
 <div style="text-align: right"><i>Query showing important events. This is the frame where the ego vehicle was spawned.</i></div>
 
-![tuto_query_blocked](img/tuto_query_blocked.png)
+![tuto_query_blocked](img/tuto_query_blocked.jpg)
 <div style="text-align: right"><i>Query showing actors blocked. In this simulation, the ego vehicle remained blocked for 100 seconds.</i></div>
 
-![tuto_query_collisions](img/tuto_query_collisions.png)
+![tuto_query_collisions](img/tuto_query_collisions.jpg)
 <div style="text-align: right"><i>Query showing a collision between the ego vehicle and an object of type "other".</i></div>
 
 !!! Note
@@ -936,8 +935,8 @@ def main():
         cam_location = carla.Location(2,0,1)
         cam_rotation = carla.Rotation(0,180,0)
         cam_transform = carla.Transform(cam_location,cam_rotation)
-        ego_cam = world.spawn_actor(cam_bp,cam_transform,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.SpringArm)
-        ego_cam.listen(lambda image: image.save_to_disk('~/tutorial/output/%.6d.png' % image.frame))
+        ego_cam = world.spawn_actor(cam_bp,cam_transform,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.Rigid)
+        ego_cam.listen(lambda image: image.save_to_disk('~/tutorial/output/%.6d.jpg' % image.frame))
         """
 
         # --------------
@@ -1172,8 +1171,8 @@ def main():
         cam_bp.set_attribute("image_size_x",str(1920))
         cam_bp.set_attribute("image_size_y",str(1080))
         cam_bp.set_attribute("fov",str(105))
-        ego_cam = world.spawn_actor(cam_bp,cam_transform,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.SpringArm)
-        ego_cam.listen(lambda image: image.save_to_disk('~/tutorial/new_rgb_output/%.6d.png' % image.frame))
+        ego_cam = world.spawn_actor(cam_bp,cam_transform,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.Rigid)
+        ego_cam.listen(lambda image: image.save_to_disk('~/tutorial/new_rgb_output/%.6d.jpg' % image.frame))
         """
 
         # --------------
@@ -1188,9 +1187,9 @@ def main():
         depth_location = carla.Location(2,0,1)
         depth_rotation = carla.Rotation(0,180,0)
         depth_transform = carla.Transform(depth_location,depth_rotation)
-        depth_cam = world.spawn_actor(depth_bp,depth_transform,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.SpringArm)
+        depth_cam = world.spawn_actor(depth_bp,depth_transform,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.Rigid)
         # This time, a color converter is applied to the image, to get the semantic segmentation view
-        depth_cam.listen(lambda image: image.save_to_disk('~/tutorial/de_log/%.6d.png' % image.frame,carla.ColorConverter.LogarithmicDepth))
+        depth_cam.listen(lambda image: image.save_to_disk('~/tutorial/de_log/%.6d.jpg' % image.frame,carla.ColorConverter.LogarithmicDepth))
         """
         # --------------
         # Add a Depth camera to ego vehicle. 
@@ -1204,9 +1203,9 @@ def main():
         depth_location02 = carla.Location(2,0,1)
         depth_rotation02 = carla.Rotation(0,180,0)
         depth_transform02 = carla.Transform(depth_location02,depth_rotation02)
-        depth_cam02 = world.spawn_actor(depth_bp02,depth_transform02,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.SpringArm)
+        depth_cam02 = world.spawn_actor(depth_bp02,depth_transform02,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.Rigid)
         # This time, a color converter is applied to the image, to get the semantic segmentation view
-        depth_cam02.listen(lambda image: image.save_to_disk('~/tutorial/de/%.6d.png' % image.frame,carla.ColorConverter.Depth))
+        depth_cam02.listen(lambda image: image.save_to_disk('~/tutorial/de/%.6d.jpg' % image.frame,carla.ColorConverter.Depth))
         """
 
         # --------------
@@ -1221,9 +1220,9 @@ def main():
         sem_location = carla.Location(2,0,1)
         sem_rotation = carla.Rotation(0,180,0)
         sem_transform = carla.Transform(sem_location,sem_rotation)
-        sem_cam = world.spawn_actor(sem_bp,sem_transform,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.SpringArm)
+        sem_cam = world.spawn_actor(sem_bp,sem_transform,attach_to=ego_vehicle, attachment_type=carla.AttachmentType.Rigid)
         # This time, a color converter is applied to the image, to get the semantic segmentation view
-        sem_cam.listen(lambda image: image.save_to_disk('~/tutorial/new_sem_output/%.6d.png' % image.frame,carla.ColorConverter.CityScapesPalette))
+        sem_cam.listen(lambda image: image.save_to_disk('~/tutorial/new_sem_output/%.6d.jpg' % image.frame,carla.ColorConverter.CityScapesPalette))
         """
         
         # --------------
@@ -1284,7 +1283,7 @@ def main():
         lidar_location = carla.Location(0,0,2)
         lidar_rotation = carla.Rotation(0,0,0)
         lidar_transform = carla.Transform(lidar_location,lidar_rotation)
-        lidar_sen = world.spawn_actor(lidar_bp,lidar_transform,attach_to=ego_vehicle,attachment_type=carla.AttachmentType.SpringArm)
+        lidar_sen = world.spawn_actor(lidar_bp,lidar_transform,attach_to=ego_vehicle,attachment_type=carla.AttachmentType.Rigid)
         lidar_sen.listen(lambda point_cloud: point_cloud.save_to_disk('/home/adas/Desktop/tutorial/new_lidar_output/%.6d.ply' % point_cloud.frame))
         """
 

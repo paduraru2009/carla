@@ -64,6 +64,103 @@ Many different issues can be dragged during the build installation, and show lik
 Other specific reasons for a system to show conflicts with CARLA may occur. Please, post these on the forum so the team can get to know more about them.   
   </details>
 
+<!-- ======================================================================= -->
+  <details>
+    <summary><h5 style="display:inline">
+    Cloning the Unreal Engine repository shows an error.
+    </h5></summary>
+
+__1. Is the Unreal Engine account activated?__ The UE repository is private. In order to clone it, create the [UE](https://www.unrealengine.com/en-US/) account, activate it (check the verification mail), and [link your GitHub](https://www.unrealengine.com/en-US/blog/updated-authentication-process-for-connecting-epic-github-accounts) account.  
+
+__2. Is git properly installated?__ Sometimes an error shows incompatibilities with the `https` protocol. It can be solved easily by uninstalling and reinstalling git. Open a terminal and run the following commands.  
+```sh
+sudo apt-get remove git #Uninstall git
+sudo apt install git-all #install git
+```
+
+  </details>
+
+<!-- ======================================================================= -->
+  <details>
+    <summary><h5 style="display:inline">
+    AttributeError: module 'carla' has no attribute 'Client' when running a script. 
+    </h5></summary>
+
+Run the following command. 
+```sh
+pip3 install -Iv setuptools==47.3.1
+``` 
+
+And build the PythonAPI again. 
+```sh
+make PythonAPI
+```
+
+Try to build the docs to test if everything is running properly. A successful message should show. 
+```sh
+make PythonAPI.docs
+```
+
+  </details>
+
+
+<!-- ======================================================================= -->
+  <details>
+    <summary><h5 style="display:inline">
+    Cannot run example scripts or "RuntimeError: rpc::rpc_error during call in function version" 
+    </h5></summary>
+
+![faq_rpc_error](img/faq_rpc_error.jpg)
+
+If running a script returns an output similar to this, there is a problem with the `.egg` file in the PythonAPI. 
+
+First of all, open `<root_carla>/PythonAPI/carla/dist`. There should be an `.egg` file for the corresponding CARLA and Python version you are using (similar to `carla-0.X.X-pyX.X-linux-x86_64.egg`). Make sure the file matches the Python version you are using. To check your Python version use the following command.  
+
+```sh
+python3 --version # CARLA no longer provides support for Python2, so we are dismissing it here
+```
+
+If either the file is missing or you think it could be corrupted, try rebuilding again.  
+```sh
+make clean
+make PythonAPI
+make launch
+``` 
+Now try one of the example scripts again. 
+
+```sh
+cd PythonAPI/examples
+python3 dynamic_weather.py
+```
+
+If the error persists, the problem is probably related with your PythonPATH. These scripts automatically look for the `.egg` file associated with the build, so maybe there is any other `.egg` file in your PythonPATH interfering with the process. Show the content of the PythonPATH with the following command.  
+
+```sh
+echo $PYTHONPATH
+```
+Look up in the output for other instances of `.egg` files in a route similar to `PythonAPI/carla/dist`, and get rid of these. They probably belong to other instances of CARLA installations. For example, if you also installed CARLA via *apt-get*, you can remove it with the following command, and the PythonPATH will be cleaned too.  
+```sh
+sudo apt-get purge carla-simulator
+```  
+
+Ultimately there is the option to add the `.egg` file of your build to the PythonPATH using the `~/.bashrc`. This is not the recommended way. It would be better to have a clear PythonPATH and simply add the path to the necessary `.egg` files in the scripts.  
+
+First, open the `~/.bashrc`.
+```sh
+gedit ~/.bashrc
+``` 
+
+Add the following lines to the `~/.bashrc`. These store the path to the build `.egg` file, so that Python can automatically find it. Save the file, and reset the terminal for changes to be effective.
+```
+export PYTHONPATH=$PYTHONPATH:"${CARLA_ROOT}/PythonAPI/carla/dist/$(ls ${CARLA_ROOT}/PythonAPI/carla/dist | grep py3.)"
+export PYTHONPATH=$PYTHONPATH:${CARLA_ROOT}/PythonAPI/carla
+```
+
+After cleaning the PythonPATH or adding the path to the build `.egg` file, all the example scripts should work properly.  
+
+  </details>
+
+
 ---
 ## Windows build
 
@@ -89,6 +186,21 @@ __1.__ Go to `carla/Unreal/CarlaUE4` and right-click the `CarlaUE4.uproject`.
 __2.__ Click on __Generate Visual Studio project files__.  
 __3.__ Open the file generated with Visual Studio 2017.  
 __4.__ Compile the project with Visual Studio. The shortcut is F7. The build will fail, but the issues found will be shown below.
+
+Different issues may result in this specific error message. The user [@tamakoji](https://github.com/tamakoji) solved a recurrent case where the source code hadn't been cloned properly and the CARLA version could not be set (when downloading this as a .zip from git).  
+
+*   __Check the `Build/CMakeLists.txt.in`.__ If it shows like `set(CARLA_VERSION )` do the following.  
+
+__1.__ Go to `Setup.bat` line 198.  
+
+__2.__ Update the line from: 
+```sh
+for /f %%i in ('git describe --tags --dirty --always') do set carla_version=%%i
+```
+to:
+```sh
+for /f %%i in ('git describe --tags --dirty --always') do set carla_version="0.9.9"
+```
   </details>
 
 <!-- ======================================================================= -->
@@ -183,7 +295,7 @@ Go to `Edit/Editor Preferences/Performance` in the editor preferences, and disab
 	
 Some scripts have requirements. These are listed in files named __Requirements.txt__, in the same path as the script itself. Be sure to check these in order to run the script. The majority of them can be installed with a simple `pip` command.  
 
-Sometimes on Windows, scripts cannot run with just `> script_name.py`. Try adding `> python script_name.py`, and make sure to be in the right directory.  
+Sometimes on Windows, scripts cannot run with just `> script_name.py`. Try adding `> python3 script_name.py`, and make sure to be in the right directory.  
 
   </details>
 
