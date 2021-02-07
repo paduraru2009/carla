@@ -78,6 +78,10 @@ namespace client {
     /// simulator window.
     SharedPtr<Actor> GetSpectator() const;
 
+    // Return a scene raycast actor
+    SharedPtr<Actor> GetRaycastActor() const;
+    void CaptureRaycastActor(std::string outpath, bool synchronous) const;
+
     rpc::EpisodeSettings GetSettings() const;
 
     /// @return The id of the frame when the settings were applied.

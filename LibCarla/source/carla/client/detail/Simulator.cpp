@@ -169,6 +169,16 @@ namespace detail {
     return MakeActor(_client.GetSpectator());
   }
 
+  SharedPtr<Actor> Simulator::GetRaycastActor() {
+        return MakeActor(_client.GetRaycastActor());
+    }
+
+  void Simulator::CaptureRaycastActor(std::string outPath, bool synchronous)
+  {
+        log_debug("Starting capture raycast to ", outPath.c_str());
+        return _client.CaptureRaycastActor(outPath, synchronous);
+  }
+
   uint64_t Simulator::SetEpisodeSettings(const rpc::EpisodeSettings &settings) {
     if (settings.synchronous_mode && !settings.fixed_delta_seconds) {
       log_warning(

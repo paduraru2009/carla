@@ -216,6 +216,8 @@ namespace detail {
     rpc::VehicleLightStateList GetVehiclesLightStates();
 
     SharedPtr<Actor> GetSpectator();
+    SharedPtr<Actor> GetRaycastActor();
+    void CaptureRaycastActor(std::string outPath, bool synchronous);
 
     rpc::EpisodeSettings GetEpisodeSettings() {
       return _client.GetEpisodeSettings();

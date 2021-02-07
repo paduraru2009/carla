@@ -26,6 +26,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Math/Vector.h"
+#include "Carla/Game/RayCastActor2.h"
 
 static FString UCarlaEpisode_GetTrafficSignId(ETrafficSignState State)
 {
@@ -229,12 +230,12 @@ TArray<FTransform> UCarlaEpisode::GetRecommendedSpawnPoints() const
   return SpawnPoints;
 }
 
-#pragma optimize("", off)
+//#pragma optimize("", off)
 
 void UCarlaEpisode::GetSpawnPointsNearCrossWalks(std::vector< UCarlaEpisode::IndexAndSpawnTransform >& outSpawnPoints) const
 {
     outSpawnPoints.clear();
-	
+
     const float MAX_DIST_TO_CROSSWALK_CM = (20.0f * 100.0f); // Centimeters
     const float MIN_DIST_TO_CROSSWALK_CM = (7.0f * 100.0f); // Centimeters
     const float MAX_DIST_TO_CROSSWALK_CM_SQR = MAX_DIST_TO_CROSSWALK_CM * MAX_DIST_TO_CROSSWALK_CM;
@@ -298,7 +299,7 @@ void UCarlaEpisode::GetSpawnPointsNearCrossWalks(std::vector< UCarlaEpisode::Ind
     }
 }
 
-#pragma optimize("", on)
+//#pragma optimize("", on)
 
 
 carla::rpc::Actor UCarlaEpisode::SerializeActor(FActorView ActorView) const
@@ -339,28 +340,53 @@ void UCarlaEpisode::AttachActors(
   }
 }
 
-void UCarlaEpisode::InitializeAtBeginPlay()
-{
-  auto World = GetWorld();
-  check(World != nullptr);
-  auto PlayerController = UGameplayStatics::GetPlayerController(World, 0);
-  if (PlayerController == nullptr)
-  {
-    UE_LOG(LogCarla, Error, TEXT("Can't find player controller!"));
-    return;
-  }
-  Spectator = PlayerController->GetPawn();
-  if (Spectator != nullptr)
-  {
-    FActorDescription Description;
-    Description.Id = TEXT("spectator");
-    Description.Class = Spectator->GetClass();
-    ActorDispatcher->RegisterActor(*Spectator, Description);
-  }
-  else
-  {
-    UE_LOG(LogCarla, Error, TEXT("Can't find spectator!"));
-  }
+
+//#pragma GCC push_options
+//#pragma GCC optimize ("O0")
+
+void UCarlaEpisode::InitializeAtBeginPlay() {
+    auto World = GetWorld();
+    check(World != nullptr);
+    auto PlayerController = UGameplayStatics::GetPlayerController(World, 0);
+    if (PlayerController == nullptr) {
+        UE_LOG(LogCarla, Error, TEXT("Can't find player controller!"));
+        return;
+    }
+    Spectator = PlayerController->GetPawn();
+    if (Spectator != nullptr) {
+        FActorDescription Description;
+        Description.Id = TEXT("spectator");
+        Description.Class = Spectator->GetClass();
+        ActorDispatcher->RegisterActor(*Spectator, Description);
+    } else {
+        UE_LOG(LogCarla, Error, TEXT("Can't find spectator!"));
+    }
+
+    RaycastActor = nullptr;
+    TArray < ARayCastActor2 * > raycastActors;
+    for (TActorIterator <ARayCastActor2> It(World); It; ++It) {
+        raycastActors.Add(*It);
+    }
+
+    if (raycastActors.Num() > 0) {
+        ensureMsgf(raycastActors.Num() <= 1,
+                   TEXT("There are more than 1 raycast actors ! I will select the first one"));
+        RaycastActor = raycastActors[0];
+    }
+
+    if (RaycastActor != nullptr) {
+        FActorDescription Description;
+        Description.Id = TEXT("raycastActor");
+        Description.Class = RaycastActor->GetClass();
+        ActorDispatcher->RegisterActor(*RaycastActor, Description);
+    }
+
+    auto ActorView = FindActor(GetRaycastActor());
+    if (!ActorView.IsValid())
+    {
+        int a = 3;
+        a++;
+    }
 
   for (TActorIterator<ATrafficSignBase> It(World); It; ++It)
   {
@@ -405,6 +431,15 @@ void UCarlaEpisode::InitializeAtBeginPlay()
       ActorDispatcher->RegisterActor(*Actor, Description);
     }
   }
+}
+
+//#pragma GCC pop_options
+
+void UCarlaEpisode::CaptureRaycastActor(std::string outPath, const bool synchronous)
+{
+    RaycastActor->m_pathToOutput = FString(outPath.c_str());
+    UE_LOG(LogTemp, Warning, TEXT("!!! Starting raycast and OUTPUT to %s" ), *RaycastActor->m_pathToOutput);
+    RaycastActor->PerformRaycast(synchronous);
 }
 
 void UCarlaEpisode::EndPlay(void)

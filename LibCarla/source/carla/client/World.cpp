@@ -46,6 +46,14 @@ namespace client {
     return _episode.Lock()->GetSpectator();
   }
 
+  SharedPtr<Actor> World::GetRaycastActor() const {
+        return _episode.Lock()->GetRaycastActor();
+  }
+
+  void World::CaptureRaycastActor(std::string outPath, bool synchronous) const {
+        return _episode.Lock()->CaptureRaycastActor(outPath, synchronous);
+  }
+
   rpc::EpisodeSettings World::GetSettings() const {
     return _episode.Lock()->GetEpisodeSettings();
   }

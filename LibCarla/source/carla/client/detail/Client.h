@@ -113,6 +113,8 @@ namespace detail {
     std::vector<rpc::ActorDefinition> GetActorDefinitions();
 
     rpc::Actor GetSpectator();
+    rpc::Actor GetRaycastActor();
+    void CaptureRaycastActor(std::string outpath, bool synchronous);
 
     rpc::EpisodeSettings GetEpisodeSettings();
 

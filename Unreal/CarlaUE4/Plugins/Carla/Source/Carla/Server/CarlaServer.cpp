@@ -52,6 +52,10 @@
 #include <map>
 #include <tuple>
 
+//#pragma GCC push_options
+//#pragma GCC optimize ("O0")
+
+
 template <typename T>
 using R = carla::rpc::Response<T>;
 
@@ -159,6 +163,7 @@ private:
 // =============================================================================
 // -- Bind Actions -------------------------------------------------------------
 // =============================================================================
+
 
 void FCarlaServer::FPimpl::BindActions()
 {
@@ -308,10 +313,17 @@ void FCarlaServer::FPimpl::BindActions()
     REQUIRE_CARLA_EPISODE();
     auto FileContents = UOpenDrive::LoadXODR(Episode->GetMapName());
     const auto &SpawnPoints = Episode->GetRecommendedSpawnPoints();
+
+    std::vector< UCarlaEpisode::IndexAndSpawnTransform > outSpawnPoints;
+    Episode->GetSpawnPointsNearCrossWalks(outSpawnPoints);
+
+    const int numSpawnPointsNearCrossWalks = outSpawnPoints.size();
+
     return cr::MapInfo{
       cr::FromFString(Episode->GetMapName()),
       cr::FromLongFString(FileContents),
-      MakeVectorFromTArray<cg::Transform>(SpawnPoints)};
+      MakeVectorFromTArray<cg::Transform>(SpawnPoints),
+      outSpawnPoints};
   };
 
   BIND_SYNC(get_navigation_mesh) << [this]() -> R<std::vector<uint8_t>>
@@ -355,6 +367,24 @@ void FCarlaServer::FPimpl::BindActions()
     }
     return Episode->SerializeActor(ActorView);
   };
+
+  BIND_SYNC(capture_raycastActor) << [this](std::string outPath, bool synchronous) -> R<void>
+  {
+    REQUIRE_CARLA_EPISODE();
+    Episode->CaptureRaycastActor(outPath, synchronous);
+    return R<void>::Success();
+  };
+
+  BIND_SYNC(get_raycastActor) << [this]() -> R<cr::Actor>
+    {
+        REQUIRE_CARLA_EPISODE();
+        auto ActorView = Episode->FindActor(Episode->GetRaycastActor());
+        if (!ActorView.IsValid())
+        {
+            RESPOND_ERROR("internal error: unable to find raycast actor");
+        }
+        return Episode->SerializeActor(ActorView);
+    };
 
   BIND_SYNC(get_all_level_BBs) << [this](uint8 QueriedTag) -> R<std::vector<cg::BoundingBox>>
   {
@@ -1562,3 +1592,5 @@ FDataStream FCarlaServer::OpenStream() const
   check(Pimpl != nullptr);
   return Pimpl->StreamingServer.MakeStream();
 }
+
+//#pragma GCC pop_options

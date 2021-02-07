@@ -189,6 +189,14 @@ namespace detail {
     return _pimpl->CallAndWait<carla::rpc::Actor>("get_spectator");
   }
 
+  rpc::Actor Client::GetRaycastActor() {
+        return _pimpl->CallAndWait<carla::rpc::Actor>("get_raycastActor");
+  }
+
+  void Client::CaptureRaycastActor(std::string outpath, bool synchronous) {
+        _pimpl->CallAndWait<void>("capture_raycastActor", outpath, synchronous);
+  }
+
   rpc::EpisodeSettings Client::GetEpisodeSettings() {
     return _pimpl->CallAndWait<rpc::EpisodeSettings>("get_episode_settings");
   }

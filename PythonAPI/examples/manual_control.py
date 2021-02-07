@@ -89,6 +89,7 @@ import math
 import random
 import re
 import weakref
+SYNCH_MODE=True
 
 try:
     import pygame
@@ -163,6 +164,13 @@ def get_actor_display_name(actor, truncate=250):
 class World(object):
     def __init__(self, carla_world, hud, args):
         self.world = carla_world
+        # Set settings for this episode and reload the world
+        settings = carla.WorldSettings(
+            no_rendering_mode=False,
+            synchronous_mode=SYNCH_MODE,
+            fixed_delta_seconds=1.0 / 30.0)
+        self.world.apply_settings(settings)
+
         self.actor_role_name = args.rolename
         try:
             self.map = self.world.get_map()
@@ -283,6 +291,9 @@ class World(object):
             self.radar_sensor = None
 
     def tick(self, clock):
+        if SYNCH_MODE == True:
+            self.world.tick()
+
         self.hud.tick(self, clock)
 
     def render(self, display):
@@ -1084,6 +1095,7 @@ def game_loop(args):
 
         hud = HUD(args.width, args.height)
         world = World(client.get_world(), hud, args)
+
         controller = KeyboardControl(world, args.autopilot)
 
         clock = pygame.time.Clock()

@@ -13,6 +13,7 @@
 #include "Carla/Settings/EpisodeSettings.h"
 #include "Carla/Util/ActorAttacher.h"
 #include "Carla/Weather/Weather.h"
+#include "Carla/Game/RayCastActor2.h"
 
 #include "GameFramework/Pawn.h"
 
@@ -146,6 +147,12 @@ public:
   APawn *GetSpectatorPawn() const
   {
     return Spectator;
+  }
+
+  UFUNCTION(BlueprintCallable)
+  AActor *GetRaycastActor() const
+  {
+      return RaycastActor;
   }
 
   UFUNCTION(BlueprintCallable)
@@ -296,6 +303,7 @@ public:
   }
 
   std::string StartRecorder(std::string name, bool AdditionalData);
+  void CaptureRaycastActor(std::string outPath, bool synchronous);
 
 private:
 
@@ -339,6 +347,7 @@ private:
 
   UPROPERTY(VisibleAnywhere)
   APawn *Spectator = nullptr;
+  ARayCastActor2 *RaycastActor = nullptr;
 
   UPROPERTY(VisibleAnywhere)
   AWeather *Weather = nullptr;

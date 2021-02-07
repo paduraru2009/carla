@@ -1,75 +1,3 @@
-"""
-Requirements:
- 0.    # Here we will run a single episode with 300 frames.
-      number_of_frames = 30
-      frame_step = 10  # Save one image every 100 frames
-
- 1. 3 types of camera: RGB, Seg, Depth
-
-    image_size = [800, 600]
-    camera_local_pos = [0.3, 0.0, 1.3] # [X, Y, Z]
-    camera_local_rotation = [0, 0, 0]  # [pitch(Y), yaw(Z), roll(X)]
-    fov = 70????????? can we control it or should be 90 ???
-
- 2. Env settings:
-
-     // We start 150 episodes from different spawn points.
-     for start_pos in range(150)
-            // Output defnition
-          //-----------------------------------------------------------------------------------------
-          // On each episode we save in OUtput stuff in:  /_out/pos_${startPos} these files using pickle
-          // A camera intrisics, canera duct definition,
-          // the cars and people details in details.
-
-
-            A. Intricics  The (3, 3) K Matrix
-            K = np.identity(3)
-            K[0, 2] = image_size[0]/ 2.0
-            K[1, 2] = image_size[1] / 2.0
-            K[0, 0] = K[1, 1] = image_size[0] / (2.0 * np.tan(fov * np.pi / 360.0))
-            with open(output_folder + '/camera_intrinsics.p', 'w') as camfile:
-                pickle.dump(K, camfile)
-
-
-
-          //-----------------------------------------------------------------------------------------
-
-            // Step 1: Start a new episode at current start point index
-             settings.set(
-                        SynchronousMode=True,
-                        SendNonPlayerAgentsInfo=True,
-                        NumberOfVehicles=100,
-                        NumberOfPedestrians=500,
-                        WeatherId=random.choice([1, 3, 7, 8, 14]))
-            On Each episode settings.randomize_seeds()
-            client.load_settings(settings)
-
-            Create the 3 camera sensors: depth, rgb, seg
-
-            # Start at location index id '0'
-            client.start_episode(start_i)
-
-            # Capture a few frames
-            for frame in range(1, number_of_frames):
-                # Read the data produced by the server this frame.
-                measurements, sensor_data = client.read_data()
-
-                 # Save one image every 'frame_step' frames
-                if not frame % frame_step:
-                    continue
-
-                Save each sensor_data in  filename ='{:s}/{:0>6d}'.format( sensor_name, frame)
-
-                # Get the point cloud colored in segmentation and RGB format
-                # Save them as {0>6d).format(frameIdx).ply  and frameIdx_seg.ply
-                #TODO: the old version was doing this to transform both the pixels in RGB and Seg to colored 3D point clouds
-                # A. PointsInFilmSpace = Transform using using depth the points from 2D image space to camera space  (K^-1 * Pimg).
-                # B. PointsInCameraSpace = PointsInFilmSpace  *  Depths for pixels // Now the points are in the camera space, 3D, colored by input given
-                # C. get C1=CameraToCar transform, and C2=CarToWorld.   PointsInWorld3DSpace = C1*C2*PointsInCameraSpace # Now we have them all colored in 3D space, the real one !
-                # D. Save as ply files
-"""
-
-
 from __future__ import print_function
 
 import glob
@@ -142,6 +70,9 @@ def compute_distance(location_1, location_2):
 def dot3D(v1, v2):
     return (v1.x*v2.x + v1.y*v2.y + v1.z*v2.z)
 
+def dot2D(v1, v2):
+    return (v1.x * v2.x + v1.y * v2.y)
+
 class RenderUtils(object):
     class EventType(Enum):
         EV_NONE = 0
@@ -207,14 +138,18 @@ class SensorsDataManagement(object):
 
     # Tick the manager using a timeout to get data and a targetFrame that the parent is looking to receive data for
     def tick(self, targetFrame, timeout):
-        data = {name: self._retrieve_data(targetFrame, q, timeout) for name, q in self._queues.items()}
-        assert all(inst.frame == targetFrame for key,inst in data.items())  # Need to get only data for the target frame requested
+        #logging.log(logging.INFO, ("Ticking manager to get data for targetFrame {0}").format(targetFrame))
 
         """
-        print("Debug print the queue status")
+        print("--Debug print the queue status")
         for name,inst in self._queues.items():
-            print(f"queue name {name} has size {inst.qsize()}")
+             print(f"--queue name {name} has size {inst.qsize()}")
         """
+
+        data = {name: self._retrieve_data(targetFrame, q, timeout) for name, q in self._queues.items()}
+        assert all(inst.frame == targetFrame for key,inst in data.items())  # Need to get only data for the target frame requested
+        #logging.log(logging.INFO, ("Got data for frame {0}").format(targetFrame))
+
         return data
 
     # Gets the target frame from a sensor queue
@@ -234,9 +169,9 @@ class DataCollector(object):
     class EnvSettings:
 
         # Capture params
-        maxNumberOfEpisodes = 3 # On each episode it will be spawned on a new data point
-        number_of_frames_to_capture = 100 # Number of frames to capture in total from an episode
-        frame_step = 10  # Save one image every 10 frames
+        maxNumberOfEpisodes = 1 # On each episode it will be spawned on a new data point
+        number_of_frames_to_capture = 200 # Number of frames to capture in total from an episode
+        frame_step = 1  # Save one image every 10 frames
 
         # Sim params
         fixedFPS = 30 # FPS for recording and simulation
@@ -252,19 +187,19 @@ class DataCollector(object):
         #camera_local_pos = carla.Location(x=0.3, y=0.0, z=1.3)  # [X, Y, Z] of local camera
         camera_front_transform = carla.Transform(carla.Location(x=0.8, z=1.65))
         fov = 70
-        isAutopilotForPlayerVehicle = False
+        isAutopilotForPlayerVehicle = True
 
         # Environment settings
         MapsToTest = ["Town03"]
         NumVehicles = 20
-        NumPedestrians = 30
+        NumPedestrians = 50
         vehicles_filter_str = "vehicle.*"
         walkers_filter_str = "walker.pedestrian.*"
 
 
         # To promote having agents around the player spawn position, we randomly select F * numPedestrians locations as start/destination points
         PedestriansSpawnPointsFactor = 100
-        PedestriansDistanceBetweenSpawnpoints = 4 # m
+        PedestriansDistanceBetweenSpawnpoints = 1 # m
 
         OUTPUT_DATA_PREFIX = "out/%s/episode_%d_%d"  # out/MapName/episode_index_spawnPointIndex
         OUTPUT_SEG = "CameraSeg"
@@ -272,7 +207,7 @@ class DataCollector(object):
         OUTPUT_DEPTH = "CameraDepth"
         OUTPUT_DEPTHLOG = "CameraDepthProc"
         OUTPUT_RGB = "CameraRGB"
-        TIMEOUT_VALUE = 10.0
+        TIMEOUT_VALUE = 100000.0
         ENABLED_SAVING = False # If activated, output saving data is enabled
         CLEAN_PREVIOUS_DATA = True # If activated, previous data folder is deleted
 
@@ -350,18 +285,24 @@ class DataCollector(object):
 
         return selectedPointsAndIndices
 
-    def prepareOutputFolder(self, folderPath):
+    # TODO: refactor to capture multiple episodes with the same scene location
+    def prepareOutputFolders(self, resourcesPath, basePath):
         if self.EnvSettings.CLEAN_PREVIOUS_DATA:
-            if os.path.exists(folderPath):
-                shutil.rmtree(folderPath)
+            if os.path.exists(resourcesPath):
+                shutil.rmtree(resourcesPath)
+            if os.path.exists(basePath):
+                shutil.rmtree(basePath)
 
-        if not os.path.exists(folderPath):
-            os.makedirs(folderPath)
-            os.mkdir(self.EnvSettings.getOutputFolder_depth(folderPath))
-            os.mkdir(self.EnvSettings.getOutputFolder_depthLog(folderPath))
-            os.mkdir(self.EnvSettings.getOutputFolder_rgb(folderPath))
-            os.mkdir(self.EnvSettings.getOutputFolder_seg(folderPath))
-            os.mkdir(self.EnvSettings.getOutputFolder_segcities(folderPath))
+        if not os.path.exists(resourcesPath):
+            os.makedirs(resourcesPath)
+            os.mkdir(self.EnvSettings.getOutputFolder_depth(resourcesPath))
+            os.mkdir(self.EnvSettings.getOutputFolder_depthLog(resourcesPath))
+            os.mkdir(self.EnvSettings.getOutputFolder_rgb(resourcesPath))
+            os.mkdir(self.EnvSettings.getOutputFolder_seg(resourcesPath))
+            os.mkdir(self.EnvSettings.getOutputFolder_segcities(resourcesPath))
+
+        if not os.path.exists(basePath):
+            os.makedirs(basePath)
 
     def createWalkersBlueprintLibrary(self):
         blueprints = self.blueprint_library.filter(self.EnvSettings.walkers_filter_str)
@@ -377,7 +318,7 @@ class DataCollector(object):
         blueprints = [x for x in blueprints if not x.id.endswith('t2')]
         return blueprints
 
-    def __init__(self, host, port):
+    def __init__(self, host, port, outputFolderPath):
         self.s_weather_presets = self.find_weather_presets()
         self.s_players_actor_list= [] # The list of all actors currently spawned for main player (his car, sensor cameras ,etc)
         self.s_vehicles_list = [] # The list of all vehicle
@@ -389,6 +330,7 @@ class DataCollector(object):
         self.RenderAsDepth = RenderUtils.EventType.EV_SWITCH_TO_RGBANDSEG
         self.client = None
         self.traffic_manager = None
+        self.BASE_OUTPUT_FOLDER = outputFolderPath
 
         pygame.init()
 
@@ -440,6 +382,12 @@ class DataCollector(object):
         self.world.apply_settings(settings)
         self.map = self.world.get_map()
 
+        self.spectator = self.world.get_spectator()
+        self.raycastActor = self.world.get_raycastActor()
+
+        crosswalks = self.map.get_crosswalks()
+        landmarks = self.map.get_all_landmarks()
+
         self.blueprint_library = self.world.get_blueprint_library()
         self.map = self.world.get_map()
 
@@ -451,25 +399,40 @@ class DataCollector(object):
         # We try to spawn the player close and with view to crosswalks
         self.spawn_points_nearcrosswalks = self.map.get_spawn_points_nearcrosswalks()
         self.player_spawn_pointsAndIndices = self.uniformSampleSpawnPoints(self.spawn_points_nearcrosswalks,
-                                                                           self.EnvSettings.maxNumberOfEpisodes)
+                                                                            self.EnvSettings.maxNumberOfEpisodes)
 
-        assert len(self.player_spawn_pointsAndIndices) > 0, "There are no interesting spawn points on this map. Remove map or lower requirements from the server side"
+        if len(self.player_spawn_pointsAndIndices) <= 0:
+            "There are no interesting spawn points on this map. Remove map or lower requirements from the server side"
+            self.releaseServerConnection()
+            raise Exception()
 
         #self.numEpisodesToSimulate = min(len(self.player_spawn_pointsAndIndices), self.EnvSettings.maxNumberOfEpisodes)
         #logging.log(logging.INFO, 'I will simulate %d episodes' % self.numEpisodesToSimulate)
         logging.log(logging.INFO, "There are %d interesting spawn points on the map" % len(self.player_spawn_pointsAndIndices))
 
-    def spawnEnvironment(self, NumberOfVehicles, NumberOfPedestrians, playerSpawnTransform):
+    def spawnEnvironment(self, NumberOfVehicles, NumberOfPedestrians, observerSpawnTransform, spawnHeroCar=False):
         logging.log(logging.INFO, "Starting to create the environment...")
 
         # Spawn the player's vehicle at the given location
-        playerSpawnLocation = playerSpawnTransform.location
-        self.currWaypoint = self.map.get_waypoint(playerSpawnTransform.location) # This is its first waypoint
+        self.spawnHeroCar = spawnHeroCar
 
-        vehiclesLib = self.blueprint_library.filter('vehicle.audi.a*')
-        self.playerVehicle = self.world.spawn_actor(random.choice(vehiclesLib), playerSpawnTransform)
-        self.s_players_actor_list.append(self.playerVehicle)
-        self.playerVehicle.set_simulate_physics(False)
+        if self.spawnHeroCar:
+            playerSpawnLocation = observerSpawnTransform.location
+            self.currWaypoint = self.map.get_waypoint(observerSpawnTransform.location)  # This is its first waypoint
+            vehiclesLib = self.blueprint_library.filter('vehicle.audi.a*')
+            self.playerVehicle = self.world.spawn_actor(random.choice(vehiclesLib), observerSpawnTransform)
+            self.s_players_actor_list.append(self.playerVehicle)
+            self.playerVehicle.set_simulate_physics(False)
+            self.playerVehicle.set_autopilot(True)
+        else:
+            playerSpawnLocation = observerSpawnTransform.location
+            self.playerVehicle = self.raycastActor
+
+        # Set the spectator pos and rot
+        spectator_loc = playerSpawnLocation
+        spectator_rot = carla.Rotation(yaw=0, pitch=0, roll=0)
+        spectator_transform = carla.Transform(spectator_loc, spectator_rot)
+        self.spectator.set_transform(spectator_transform)
 
         # Spawn the camera sensors
         #------------------------------------------------------
@@ -508,7 +471,7 @@ class DataCollector(object):
         # Spawn vehicles
         # --------------
         logging.log(logging.INFO, 'Spawning vehicles')
-        self.vehicles_spawn_points = sorted(self.vehicles_spawn_points, key = lambda transform : compute_distance(transform.location, playerSpawnTransform.location))
+        self.vehicles_spawn_points = sorted(self.vehicles_spawn_points, key = lambda transform : compute_distance(transform.location, observerSpawnTransform.location))
         for n, transform in enumerate(self.vehicles_spawn_points):
             if n >= NumberOfVehicles:
                 break
@@ -529,7 +492,14 @@ class DataCollector(object):
         # -------------
         # Spawn Walkers
         # -------------
-        playerSpawnForward = playerSpawnTransform.rotation.get_forward_vector()
+        playerSpawnForward = observerSpawnTransform.rotation.get_forward_vector()
+
+        # Tests if a position is in front of an observer knowing its position and forward
+        def isPosInFaceOfObserverPos(observerForward, observerPos, targetPos):
+            observeToPos = targetPos - observerPos
+            return dot2D(observeToPos, observerForward) > 0
+
+
         logging.log(logging.INFO, 'Spawning walkers...')
         walkers_list = []
         # 1. take all the random locations to spawn
@@ -542,12 +512,10 @@ class DataCollector(object):
             loc2 = self.world.get_random_location_from_navigation()
             if (loc1 != None and loc2 != None):
 
-                # Check if one of them are in front of the car
-                forward_loc1 = loc1 - playerSpawnLocation
-                forward_loc2 = loc2 - playerSpawnLocation
-                isLoc1InFront = dot3D(forward_loc1, playerSpawnForward)
-                isLoc2InFront = dot3D(forward_loc2, playerSpawnForward)
-                if isLoc1InFront or isLoc2InFront:
+                # Check if both of them are in front of the car
+                isLoc1InFront = isPosInFaceOfObserverPos(playerSpawnForward, playerSpawnLocation, loc1)
+                isLoc2InFront = isPosInFaceOfObserverPos(playerSpawnForward, playerSpawnLocation, loc2)
+                if isLoc1InFront and isLoc2InFront:
                     # Swap spawn with destination maybe position
                     #if isLoc1InFront == False:
                     #    loc2, loc1 = loc1, loc2
@@ -555,10 +523,11 @@ class DataCollector(object):
                     spawn_point.location = loc1
                     destination_point = carla.Transform()
                     destination_point.location = loc2
-                    spawnAndDestinationPoints_extended.append((spawn_point, destination_point))
+                    distance = compute_distance(spawn_point.location, observerSpawnTransform.location)
+                    spawnAndDestinationPoints_extended.append((spawn_point, destination_point, distance))
 
         # Sort the points depending on their distance to playerSpawnTransform
-        spawnAndDestinationPoints_extended = sorted(spawnAndDestinationPoints_extended, key = lambda SpawnAndDestTransform : compute_distance(SpawnAndDestTransform[0].location, playerSpawnTransform.location))
+        spawnAndDestinationPoints_extended = sorted(spawnAndDestinationPoints_extended, key = lambda SpawnAndDestTransform : SpawnAndDestTransform[2])
 
         if len(spawnAndDestinationPoints_extended) > 0:
             # Now select points that are Xm depart from each other
@@ -567,7 +536,7 @@ class DataCollector(object):
             for pIndex in range(1, len(spawnAndDestinationPoints_extended)):
                 potential_point = spawnAndDestinationPoints_extended[pIndex]
                 shortedDistToAnySelected = math.inf
-                for selectedPoint, destPoint in spawnAndDestinationPoints:
+                for selectedPoint, destPoint, distToObserverpos in spawnAndDestinationPoints:
                     distToThisSelPoint = compute_distance(potential_point[0].location, selectedPoint.location)
                     if distToThisSelPoint < shortedDistToAnySelected:
                         shortedDistToAnySelected = distToThisSelPoint
@@ -597,7 +566,7 @@ class DataCollector(object):
         batch = []
         walker_speed = []
         target_points = []
-        for spawn_point, target_point in spawnAndDestinationPoints:
+        for spawn_point, target_point, distToObserverpos in spawnAndDestinationPoints:
             walker_bp = random.choice(blueprints_walkers)
             # set as not invincible
             if walker_bp.has_attribute('is_invincible'):
@@ -727,19 +696,118 @@ class DataCollector(object):
         client.apply_batch([carla.command.DestroyActor(x) for x in self.s_all_pedestrian_ids])
         self.s_all_pedestrian_ids = []
 
-        logging.log(logging.INFO, f"Destroying all {len(self.s_players_actor_list)/2} player\'s actors")
-        client.apply_batch([carla.command.DestroyActor(x) for x in self.s_players_actor_list])
-        self.s_players_actor_list = []
+        if len(self.s_players_actor_list) > 0:
+            logging.log(logging.INFO, f"Destroying all {len(self.s_players_actor_list)/2} player\'s actors")
+            client.apply_batch([carla.command.DestroyActor(x) for x in self.s_players_actor_list])
+            self.s_players_actor_list = []
 
         time.sleep(SYNC_TIME_PLUS)
         self.world.tick()
 
-        logging.log(logging.INFO, 'Destroying the environment')
-        self.releaseServerConnection()
-
         logging.log(logging.INFO, "===End destroying the environment...")
 
-    def collectSingleEpisodeData(self, outputFolder):
+    @staticmethod
+    def get_matrix(transform):
+        """
+		Creates matrix from carla transform.
+		"""
+        rotation = transform.rotation
+        location = transform.location
+        c_y = np.cos(np.radians(rotation.yaw))
+        s_y = np.sin(np.radians(rotation.yaw))
+        c_r = np.cos(np.radians(rotation.roll))
+        s_r = np.sin(np.radians(rotation.roll))
+        c_p = np.cos(np.radians(rotation.pitch))
+        s_p = np.sin(np.radians(rotation.pitch))
+        matrix = np.matrix(np.identity(4))
+        matrix[0, 3] = location.x
+        matrix[1, 3] = location.y
+        matrix[2, 3] = location.z
+        matrix[0, 0] = c_p * c_y
+        matrix[0, 1] = c_y * s_p * s_r - s_y * c_r
+        matrix[0, 2] = -c_y * s_p * c_r - s_y * s_r
+        matrix[1, 0] = s_y * c_p
+        matrix[1, 1] = s_y * s_p * s_r + c_y * c_r
+        matrix[1, 2] = -s_y * s_p * c_r + c_y * s_r
+        matrix[2, 0] = s_p
+        matrix[2, 1] = -c_p * s_r
+        matrix[2, 2] = c_p * c_r
+        return matrix
+
+    # Get the bbox of an actor in world space
+    def getActorWorldBBox(self, actor):
+        actorBBox = actor.bounding_box
+        cords = np.zeros((8, 4))
+
+        # Get the box extent
+        extent = actorBBox.extent
+        cords[0, :] = np.array([extent.x, extent.y, -extent.z, 1])
+        cords[1, :] = np.array([-extent.x, extent.y, -extent.z, 1])
+        cords[2, :] = np.array([-extent.x, -extent.y, -extent.z, 1])
+        cords[3, :] = np.array([extent.x, -extent.y, -extent.z, 1])
+        cords[4, :] = np.array([extent.x, extent.y, extent.z, 1])
+        cords[5, :] = np.array([-extent.x, extent.y, extent.z, 1])
+        cords[6, :] = np.array([-extent.x, -extent.y, extent.z, 1])
+        cords[7, :] = np.array([extent.x, -extent.y, extent.z, 1])
+
+        bb_transform = carla.Transform(actorBBox.location)
+        bb_matrix = self.get_matrix(bb_transform)
+        actor_world_matrix = self.get_matrix(actor.get_transform())
+        bb_world_matrix = np.dot(actor_world_matrix, bb_matrix)
+        world_cords = np.dot(bb_world_matrix, np.transpose(cords))
+        return world_cords
+
+    # Given a list of actors, write a dictionary for each frame and actor id, the BBoxMinMax and velocity
+    def addFrameData_internal(self, listOfActors, outputDS):
+        for actor in listOfActors:
+            assert isinstance(actor, carla.Walker) or isinstance(actor, carla.Vehicle)
+            actorId = actor.id
+            actorTransform = actor.get_transform()
+            actorLocation = actor.get_location()
+            actorVelocity = actor.get_velocity()
+            actorVelocity = np.array([actorVelocity.x, actorVelocity.y, actorVelocity.z])
+
+            # Returns as [4 x 8], x,y,z1 for each of the 8 points. So all X are on row 0, Y on row 1, Z on row 2
+            actorWorldBBox = self.getActorWorldBBox(actor)
+
+            xMin = np.min(actorWorldBBox[0, :])
+            xMax = np.max(actorWorldBBox[0, :])
+            yMin = np.min(actorWorldBBox[1, :])
+            yMax = np.max(actorWorldBBox[1, :])
+            zMin = np.min(actorWorldBBox[2, :])
+            zMax = np.max(actorWorldBBox[2, :])
+            bboxMinMax = np.array([[xMin, xMax], [yMin, yMax], [zMin, zMax]])
+
+            assert actorId not in outputDS
+            # Fill the data for this actor
+            actorData = {'BBMinMax' : bboxMinMax, 'Velocity':actorVelocity}
+            outputDS[actorId] = actorData
+
+    def addFrameData(self, frameId, worldFrame, out_vehicles_data, out_pedestrians_data):
+        assert frameId not in out_pedestrians_data
+        assert frameId not in out_vehicles_data
+
+        out_vehicles_data[frameId] = {}
+        out_pedestrians_data[frameId] = {}
+
+        # Iterate over walkers and get their
+        # DO NOT CACHE THESE BECAUSE THEY CAN MODIFY AT RUNTIME
+        allWalkerActorsIds = [self.s_all_pedestrian_ids[walkerId] for walkerId in range(1, len(self.s_all_pedestrian_ids), 2)]
+        allVehicleActors = [vehicle for vehicle in self.s_vehicles_list]
+        allWalkerActors = self.world.get_actors(allWalkerActorsIds)
+
+        self.addFrameData_internal(allWalkerActors, out_pedestrians_data[frameId])
+        self.addFrameData_internal(allVehicleActors, out_vehicles_data[frameId])
+
+
+    def collectSingleEpisodeData(self, outputFolder, playerSpawnTransform):
+        # Spawn the environment first
+        self.spawnEnvironment(NumberOfVehicles=self.EnvSettings.NumVehicles,
+                              NumberOfPedestrians=self.EnvSettings.NumPedestrians,
+                              observerSpawnTransform=playerSpawnTransform,
+                              spawnHeroCar=False)
+
+        # Collect data
         logging.log(logging.INFO, "Collecting data for this episode..")
         numSimFrame = self.EnvSettings.number_of_frames_to_capture * self.EnvSettings.frame_step
 
@@ -752,6 +820,11 @@ class DataCollector(object):
         outputFolder_rgb    = self.EnvSettings.getOutputFolder_rgb(outputFolder)
         outputFolder_seg    = self.EnvSettings.getOutputFolder_seg(outputFolder)
         output_segcities    = self.EnvSettings.getOutputFolder_segcities(outputFolder)
+
+        # Vehicles and pedestrians data as dicts of [FrameId][EntityId]['BBoxMinMax'], each with a 3x2 describing the bounding box as min value on column 0 and max on column 1
+        # And 'velocity'
+        vehicles_data = {}
+        pedestrians_data = {}
 
         tenthNumFrames = (numSimFrame / 10)
         for frameId in range(numSimFrame):
@@ -771,9 +844,12 @@ class DataCollector(object):
             self.clock.tick()
             worldFrame = self.world.tick()
 
+            # Now take the actors and update the data
+            self.addFrameData(frameId, worldFrame, vehicles_data, pedestrians_data)
+
             # Advance the simulation and wait for the data.
             #logging.log(logging.INFO, f"Getting data for frame {worldFrame}")
-            syncData = dataManager.tick(targetFrame=worldFrame, timeout=self.EnvSettings.TIMEOUT_VALUE * 100.0) # Because sometimes you forget to put the focus on server and BOOM
+            syncData = dataManager.tick(targetFrame=worldFrame, timeout=None)#self.EnvSettings.TIMEOUT_VALUE * 100.0) # Because sometimes you forget to put the focus on server and BOOM
             #logging.log(logging.INFO, f"Data retrieved for frame {worldFrame}")
 
             # Take the date from world
@@ -801,13 +877,14 @@ class DataCollector(object):
                 image_seg.convert(carla.ColorConverter.CityScapesPalette)
                 image_depth.convert(carla.ColorConverter.Depth)
 
-            # Choose the next waypoint and update the car location.
-            if not self.EnvSettings.STATIC_CAR:
-                self.currWaypoint = random.choice( self.currWaypoint.next(1.5))
-                self.playerVehicle.set_transform( self.currWaypoint.transform)
-            else:
-                # Apply brake
-                self.playerVehicle.apply_control(carla.VehicleControl(hand_brake=True))
+            if self.spawnHeroCar:
+                # Choose the next waypoint and update the car location.
+                if not self.EnvSettings.STATIC_CAR:
+                    self.currWaypoint = random.choice( self.currWaypoint.next(1.5))
+                    self.playerVehicle.set_transform( self.currWaypoint.transform)
+                else:
+                    # Apply brake
+                    self.playerVehicle.apply_control(carla.VehicleControl(hand_brake=True))
 
             # Draw the display and stats
             if self.RenderAsDepth ==  RenderUtils.EventType.EV_SWITCH_TO_DEPTH:
@@ -823,9 +900,24 @@ class DataCollector(object):
             self.display.blit(self.font.render('% 5d FPS (simulated)' % fps, True, (255, 255, 255)),(8, 38))
             pygame.display.flip()
 
+        filepathsAndDictionaries = {'pedestrians': (pedestrians_data, os.path.join(self.BASE_OUTPUT_FOLDER, "people.p")),
+                                    'cars': (vehicles_data, os.path.join(self.BASE_OUTPUT_FOLDER, "cars.p"))
+                                    }
+        for key, value in filepathsAndDictionaries.items():
+            dataObj = value[0]
+            filePath = value[1]
+            with open(filePath, mode="wb") as fileObj:
+                pickle.dump(dataObj, fileObj, protocol=2)  # Protocol 2 because seems to be compatible between 2.x and 3.x !
+
+        # Destroy the environment
+        self.destroy_current_environment(self.client)
+
         return True
 
-    def collectData(self):
+    def capturePointCloud(self):
+        self.world.capture_raycastActor(outpath=self.BASE_OUTPUT_FOLDER, synchronous=True)
+
+    def collectData(self, spawnHeroCar, capturePointCloud):
         if (self.client is None):
             logging.log(logging.INFO, "Can't collect data because client is not connected to server")
             return
@@ -843,22 +935,24 @@ class DataCollector(object):
                     logging.log(logging.INFO, "Preparing episode %s\n=================", episodeIndex)
                     logging.log(logging.INFO, "Setting parameters and world %s\n=================", episodeIndex)
 
-                    spawnPointIter = episodeIndex % len(self.player_spawn_pointsAndIndices)
-                    playerSpawnTransform = self.player_spawn_pointsAndIndices[spawnPointIter][1] # The location where to spawn
-                    playerSpawnIndex = self.player_spawn_pointsAndIndices[spawnPointIter][0] # The index from the original set of spawn points where to spawn
+                    if spawnHeroCar:
+                        spawnPointIter = episodeIndex % len(self.player_spawn_pointsAndIndices)
+                        playerSpawnTransform = self.player_spawn_pointsAndIndices[spawnPointIter][1] # The location where to spawn
+                        playerSpawnIndex = self.player_spawn_pointsAndIndices[spawnPointIter][0] # The index from the original set of spawn points where to spawn
+                    else:
+                        playerSpawnIndex = 9999
+                        playerSpawnTransform = self.raycastActor.get_transform()
 
                     logging.log(logging.INFO, ('Spawning player vehicle at index %d and position (%f, %f, %f)') % (playerSpawnIndex,
                     playerSpawnTransform.location.x, playerSpawnTransform.location.y, playerSpawnTransform.location.z))
 
-
-                    self.spawnEnvironment(NumberOfVehicles=self.EnvSettings.NumVehicles,
-                                          NumberOfPedestrians=self.EnvSettings.NumPedestrians,
-                                          playerSpawnTransform=playerSpawnTransform)
-
                     output_folder = self.EnvSettings.OUTPUT_DATA_PREFIX % (mapName, episodeIndex, playerSpawnIndex)
-                    self.prepareOutputFolder(output_folder)
-                    shouldContinue = self.collectSingleEpisodeData(output_folder)
-                    self.destroy_current_environment(self.client)
+                    self.prepareOutputFolders(output_folder, self.BASE_OUTPUT_FOLDER)
+
+                    if capturePointCloud:
+                        self.capturePointCloud()
+
+                    shouldContinue = self.collectSingleEpisodeData(output_folder, playerSpawnTransform)
 
                     if shouldContinue == False:
                         break
@@ -866,11 +960,17 @@ class DataCollector(object):
             print("Unexpected error:", sys.exc_info()[0])
             tb = traceback.format_exc()
             print(tb)
+            self.destroy_current_environment(self.client)
+            logging.log(logging.INFO, 'Destroying the environment')
+            self.releaseServerConnection()
+            pygame.quit()
             raise
 
         finally:
             print("Finished, so I'm destroying the environment and reaply settings")
             self.destroy_current_environment(self.client)
+            logging.log(logging.INFO, 'Destroying the environment')
+            self.releaseServerConnection()
             pygame.quit()
 
 def main():
@@ -892,14 +992,35 @@ def main():
         type=int,
         help='TCP port to listen to (default: 2000)')
 
+    argparser.add_argument(
+        '-hero', '--hero',
+        metavar='P',
+        default=1,
+        type=int,
+        help='Should spawn hero car ?')
+
+    argparser.add_argument(
+        '-capturePointCloud', '--capturePointCloud',
+        metavar='P',
+        type=int,
+        help='Should we capture the point cloud ?'
+    )
+
+    argparser.add_argument(
+        '-outDataPath', '--outDataPath',
+        metavar='P',
+        type=str,
+        help='Should we capture the point cloud ?'
+    )
+
     args = argparser.parse_args()
 
     log_level = logging.DEBUG if args.debug else logging.INFO
     logging.basicConfig(format='%(levelname)s: %(message)s', level=log_level)
     logging.info('listening to server %s:%s', args.host, args.port)
 
-    dc = DataCollector(host=args.host, port=args.port)
-    dc.collectData()
+    dc = DataCollector(host=args.host, port=args.port, outputFolderPath=args.outDataPath)
+    dc.collectData(spawnHeroCar = False if args.hero == 0 else True, capturePointCloud=args.capturePointCloud)
     print('\nDone!')
 
 

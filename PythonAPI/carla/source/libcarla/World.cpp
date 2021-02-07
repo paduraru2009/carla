@@ -63,6 +63,12 @@ static auto Tick(carla::client::World &world, double seconds) {
   return world.Tick(TimeDurationFromSeconds(seconds));
 }
 
+static auto CaptureRaycastActor(carla::client::World & world, std::string outPath, bool synchronous)
+{
+    carla::PythonUtil::ReleaseGIL unlock;
+    return world.CaptureRaycastActor(outPath, synchronous);
+}
+
 static auto GetActorsById(carla::client::World &self, const boost::python::list &actor_ids) {
   std::vector<carla::ActorId> ids{
       boost::python::stl_input_iterator<carla::ActorId>(actor_ids),
@@ -249,6 +255,8 @@ void export_world() {
     .def("get_map", CONST_CALL_WITHOUT_GIL(cc::World, GetMap))
     .def("get_random_location_from_navigation", CALL_RETURNING_OPTIONAL_WITHOUT_GIL(cc::World, GetRandomLocationFromNavigation))
     .def("get_spectator", CONST_CALL_WITHOUT_GIL(cc::World, GetSpectator))
+    .def("get_raycastActor", CONST_CALL_WITHOUT_GIL(cc::World, GetRaycastActor))
+    .def("capture_raycastActor", &CaptureRaycastActor, (arg("outpath"), arg("synchronous")))
     .def("get_settings", CONST_CALL_WITHOUT_GIL(cc::World, GetSettings))
     .def("apply_settings", CALL_WITHOUT_GIL_1(cc::World, ApplySettings, cr::EpisodeSettings), arg("settings"))
     .def("get_weather", CONST_CALL_WITHOUT_GIL(cc::World, GetWeather))
