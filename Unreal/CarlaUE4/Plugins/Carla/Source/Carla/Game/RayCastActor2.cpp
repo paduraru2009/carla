@@ -140,16 +140,38 @@ FVector ARayCastActor2::getWorldCoordFromVoxelCoord(const FVector& voxelsPos)
 
 void ARayCastActor2::WriteOutputPlyFiles()
 {
-    const char* outputFileNameSeg = TCHAR_TO_ANSI(*FString::Printf(TEXT("%s/00000_seg.ply"), *m_pathToOutput));
-    const char* outputFileNameSegColor = TCHAR_TO_ANSI(*FString::Printf(TEXT("%s/00000_segColor.ply"), *m_pathToOutput));
-    const char* outputFileNameRGB = TCHAR_TO_ANSI(*FString::Printf(TEXT("%s/00000.ply"), *m_pathToOutput));
-    const char* outputTranslationFileName = TCHAR_TO_ANSI(*FString::Printf(TEXT("%s/translation.txt"), *m_pathToOutput));
+#if 1
+    const FString segPath = FString::Printf(TEXT("%s/00000_seg.ply"), *m_pathToOutput);
+    std::string segPathStr(TCHAR_TO_UTF8(*segPath));
+    const char* outputFileNameSeg = segPathStr.c_str();
+
+    const FString segColorPath = FString::Printf(TEXT("%s/00000_segColor.ply"), *m_pathToOutput);
+    std::string segColorPathStr(TCHAR_TO_UTF8(*segColorPath));
+    const char* outputFileNameSegColor = segColorPathStr.c_str();
+
+    const FString rgbPath = FString::Printf(TEXT("%s/00000.ply"), *m_pathToOutput);
+    std::string rgbPathStr(TCHAR_TO_UTF8(*rgbPath));
+    const char* outputFileNameRGB = rgbPathStr.c_str();
+
+    const FString transPath = FString::Printf(TEXT("%s/translation.txt"), *m_pathToOutput);
+    std::string transPathStr(TCHAR_TO_UTF8(*transPath));
+    const char* outputTranslationFileName = transPathStr.c_str();
+#else
+    const char* outputFileNameSeg = "/home/ciprian/Desktop/DatasetCustom/Scene1/00000_seg.ply";
+    const char* outputFileNameSegColor = "/home/ciprian/Desktop/DatasetCustom/Scene1/00000_segColor.ply";
+    const char* outputFileNameRGB = "/home/ciprian/Desktop/DatasetCustom/Scene1/00000.ply";
+    const char* outputTranslationFileName = "/home/ciprian/Desktop/DatasetCustom/Scene1/translation.txt";
+#endif
 
     std::ofstream outputFile_seg, outputFile_rgb, outputFile_segColor, outputFile_translation;
     outputFile_seg.open(outputFileNameSeg);
+    ensureMsgf(outputFile_seg.is_open(), TEXT("Couldn't open file for writing!!!!!!"));
+    check(outputFile_seg.is_open());
     outputFile_rgb.open(outputFileNameRGB);
     outputFile_segColor.open(outputFileNameSegColor);
     outputFile_translation.open(outputTranslationFileName);
+
+    UE_LOG(LogTemp, Error, TEXT("!!! Will write OUTPUT seg to %s" ), *FString(outputFileNameSeg));
 
     FVector referencePos2D = m_useLocationAsCenterPos ? GetActorLocation() : m_centerPos;
     referencePos2D.Z = 0.0f;
@@ -243,7 +265,11 @@ void ARayCastActor2::WriteOutputPlyFiles()
     convertFromCMToMeters(worldTranslationPos.X, worldTranslationPos.Y, worldTranslationPos.Z);
     outputFile_translation << worldTranslationPos.X << " " << worldTranslationPos.Y << " " << worldTranslationPos.Z;
 
-    UE_LOG(LogTemp, Warning, TEXT("!!! Wrote OUTPUT to %s" ), outputFileNameSeg);
+    outputFile_seg.close();
+    outputFile_rgb.close();
+    outputFile_segColor.close();
+    outputFile_translation.close();
+    UE_LOG(LogTemp, Error, TEXT("!!! Wroteee OUTPUT to %s" ), *FString(outputFileNameSeg));
 }
 
 int32 GetMaterialByFaceIndex(const UStaticMesh* mesh, const int32& faceIndex)
